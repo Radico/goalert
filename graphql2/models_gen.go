@@ -276,6 +276,7 @@ type CreateServiceInput struct {
 	Description          *string                       `json:"description,omitempty"`
 	Favorite             *bool                         `json:"favorite,omitempty"`
 	EscalationPolicyID   *string                       `json:"escalationPolicyID,omitempty"`
+	NotificationUrgency  *service.Urgency              `json:"notificationUrgency,omitempty"`
 	NewEscalationPolicy  *CreateEscalationPolicyInput  `json:"newEscalationPolicy,omitempty"`
 	NewIntegrationKeys   []CreateIntegrationKeyInput   `json:"newIntegrationKeys,omitempty"`
 	Labels               []SetLabelInput               `json:"labels,omitempty"`
@@ -912,11 +913,12 @@ type UpdateScheduleInput struct {
 }
 
 type UpdateServiceInput struct {
-	ID                   string     `json:"id"`
-	Name                 *string    `json:"name,omitempty"`
-	Description          *string    `json:"description,omitempty"`
-	EscalationPolicyID   *string    `json:"escalationPolicyID,omitempty"`
-	MaintenanceExpiresAt *time.Time `json:"maintenanceExpiresAt,omitempty"`
+	ID                   string           `json:"id"`
+	Name                 *string          `json:"name,omitempty"`
+	Description          *string          `json:"description,omitempty"`
+	EscalationPolicyID   *string          `json:"escalationPolicyID,omitempty"`
+	MaintenanceExpiresAt *time.Time       `json:"maintenanceExpiresAt,omitempty"`
+	NotificationUrgency  *service.Urgency `json:"notificationUrgency,omitempty"`
 }
 
 type UpdateUserCalendarSubscriptionInput struct {

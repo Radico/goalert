@@ -1260,6 +1260,7 @@ type Service struct {
 	ID                   uuid.UUID
 	MaintenanceExpiresAt sql.NullTime
 	Name                 string
+	NotificationUrgency  string
 }
 
 type SwitchoverLog struct {

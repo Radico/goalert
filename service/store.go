@@ -37,7 +37,8 @@ func NewStore(ctx context.Context, db *sql.DB) (*Store, error) {
 			s.escalation_policy_id,
 			e.name,
 			fav	is distinct from null,
-			s.maintenance_expires_at
+			s.maintenance_expires_at,
+			s.notification_urgency
 		FROM
 			services s
 		JOIN escalation_policies e ON e.id = s.escalation_policy_id
@@ -50,7 +51,8 @@ func NewStore(ctx context.Context, db *sql.DB) (*Store, error) {
 			s.id,
 			s.name,
 			s.description,
-			s.escalation_policy_id
+			s.escalation_policy_id,
+			s.notification_urgency
 		FROM services s
 		WHERE s.id = $1
 		FOR UPDATE
@@ -63,7 +65,8 @@ func NewStore(ctx context.Context, db *sql.DB) (*Store, error) {
 			s.escalation_policy_id,
 			e.name,
 			fav	is distinct from null,
-			s.maintenance_expires_at
+			s.maintenance_expires_at,
+			s.notification_urgency
 		FROM
 			services s
 		JOIN escalation_policies e ON e.id = s.escalation_policy_id
@@ -80,7 +83,8 @@ func NewStore(ctx context.Context, db *sql.DB) (*Store, error) {
 			s.escalation_policy_id,
 			e.name,
 			false,
-			s.maintenance_expires_at
+			s.maintenance_expires_at,
+			s.notification_urgency
 		FROM
 			services s,
 			escalation_policies e
@@ -88,8 +92,8 @@ func NewStore(ctx context.Context, db *sql.DB) (*Store, error) {
 			e.id = $1 AND
 			e.id = s.escalation_policy_id
 	`)
-	s.insert = p(`INSERT INTO services (id,name,description,escalation_policy_id) VALUES ($1,$2,$3,$4)`)
-	s.update = p(`UPDATE services SET name = $2, description = $3, escalation_policy_id = $4, maintenance_expires_at = $5 WHERE id = $1`)
+	s.insert = p(`INSERT INTO services (id,name,description,escalation_policy_id,notification_urgency) VALUES ($1,$2,$3,$4,$5)`)
+	s.update = p(`UPDATE services SET name = $2, description = $3, escalation_policy_id = $4, maintenance_expires_at = $5, notification_urgency = $6 WHERE id = $1`)
 	s.delete = p(`DELETE FROM services WHERE id = any($1)`)
 
 	return s, prep.Err
@@ -105,7 +109,7 @@ func (s *Store) FindOneForUpdate(ctx context.Context, tx *sql.Tx, id string) (*S
 		return nil, err
 	}
 	var svc Service
-	err = tx.StmtContext(ctx, s.findOneUp).QueryRowContext(ctx, id).Scan(&svc.ID, &svc.Name, &svc.Description, &svc.EscalationPolicyID)
+	err = tx.StmtContext(ctx, s.findOneUp).QueryRowContext(ctx, id).Scan(&svc.ID, &svc.Name, &svc.Description, &svc.EscalationPolicyID, &svc.NotificationUrgency)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +154,7 @@ func (s *Store) CreateServiceTx(ctx context.Context, tx *sql.Tx, svc *Service) (
 	if tx != nil {
 		stmt = tx.Stmt(stmt)
 	}
-	_, err = stmt.ExecContext(ctx, n.ID, n.Name, n.Description, n.EscalationPolicyID)
+	_, err = stmt.ExecContext(ctx, n.ID, n.Name, n.Description, n.EscalationPolicyID, n.NotificationUrgency)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +207,7 @@ func (s *Store) UpdateTx(ctx context.Context, tx *sql.Tx, svc *Service) error {
 		Valid: !n.MaintenanceExpiresAt.IsZero(),
 	}
 
-	_, err = wrap(tx, s.update).ExecContext(ctx, n.ID, n.Name, n.Description, n.EscalationPolicyID, mExp)
+	_, err = wrap(tx, s.update).ExecContext(ctx, n.ID, n.Name, n.Description, n.EscalationPolicyID, mExp, n.NotificationUrgency)
 	return err
 }
 
@@ -248,7 +252,7 @@ func (s *Store) FindOne(ctx context.Context, id string) (*Service, error) {
 
 func scanFrom(s *Service, f func(args ...interface{}) error) error {
 	var maintExpiresAt sql.NullTime
-	err := f(&s.ID, &s.Name, &s.Description, &s.EscalationPolicyID, &s.epName, &s.isUserFavorite, &maintExpiresAt)
+	err := f(&s.ID, &s.Name, &s.Description, &s.EscalationPolicyID, &s.epName, &s.isUserFavorite, &maintExpiresAt, &s.NotificationUrgency)
 	if err != nil {
 		return err
 	}

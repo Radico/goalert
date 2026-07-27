@@ -592,6 +592,7 @@ input CreateServiceInput {
   favorite: Boolean
 
   escalationPolicyID: ID
+  notificationUrgency: ServiceUrgency
   newEscalationPolicy: CreateEscalationPolicyInput
   newIntegrationKeys: [CreateIntegrationKeyInput!]
   labels: [SetLabelInput!]
@@ -645,6 +646,7 @@ input UpdateServiceInput {
   description: String
   escalationPolicyID: ID
   maintenanceExpiresAt: ISOTimestamp
+  notificationUrgency: ServiceUrgency
 }
 
 input UpdateEscalationPolicyInput {
@@ -1105,6 +1107,21 @@ type AlertMetadata {
   value: String!
 }
 
+"""
+Urgency controls whether alerts for a service notify anyone.
+"""
+enum ServiceUrgency {
+  """
+  Alerts run the escalation policy and notify on-call users.
+  """
+  high
+
+  """
+  Alerts are recorded for tracking only; nobody is notified.
+  """
+  low
+}
+
 type Service {
   id: ID!
   name: String!
@@ -1113,6 +1130,12 @@ type Service {
   escalationPolicy: EscalationPolicy
   isFavorite: Boolean!
   maintenanceExpiresAt: ISOTimestamp
+
+  """
+  Controls whether alerts for this service notify anyone. Low urgency services
+  still record alerts for tracking, but never run the escalation policy.
+  """
+  notificationUrgency: ServiceUrgency!
 
   onCallUsers: [ServiceOnCallUser!]!
   integrationKeys: [IntegrationKey!]!

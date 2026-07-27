@@ -671,6 +671,7 @@ func (q *Queries) Alert_LockManyAlertServices(ctx context.Context, alertIds []in
 const alert_LockOneAlertService = `-- name: Alert_LockOneAlertService :one
 SELECT
     maintenance_expires_at NOTNULL::bool AS is_maint_mode,
+    (svc.notification_urgency = 'low')::bool AS is_low_urgency,
     alerts.status
 FROM
     services svc
@@ -681,15 +682,16 @@ FOR UPDATE
 `
 
 type Alert_LockOneAlertServiceRow struct {
-	IsMaintMode bool
-	Status      EnumAlertStatus
+	IsMaintMode  bool
+	IsLowUrgency bool
+	Status       EnumAlertStatus
 }
 
 // Locks the service associated with the alert.
 func (q *Queries) Alert_LockOneAlertService(ctx context.Context, id int64) (Alert_LockOneAlertServiceRow, error) {
 	row := q.db.QueryRowContext(ctx, alert_LockOneAlertService, id)
 	var i Alert_LockOneAlertServiceRow
-	err := row.Scan(&i.IsMaintMode, &i.Status)
+	err := row.Scan(&i.IsMaintMode, &i.IsLowUrgency, &i.Status)
 	return i, err
 }
 

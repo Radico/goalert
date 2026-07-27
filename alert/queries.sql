@@ -2,6 +2,7 @@
 -- Locks the service associated with the alert.
 SELECT
     maintenance_expires_at NOTNULL::bool AS is_maint_mode,
+    (svc.notification_urgency = 'low')::bool AS is_low_urgency,
     alerts.status
 FROM
     services svc

@@ -310,6 +310,7 @@ export interface CreateServiceInput {
   newEscalationPolicy?: null | CreateEscalationPolicyInput
   newHeartbeatMonitors?: null | CreateHeartbeatMonitorInput[]
   newIntegrationKeys?: null | CreateIntegrationKeyInput[]
+  notificationUrgency?: null | ServiceUrgency
 }
 
 export interface CreateUserCalendarSubscriptionInput {
@@ -1092,6 +1093,7 @@ export interface Service {
   maintenanceExpiresAt?: null | ISOTimestamp
   name: string
   notices: Notice[]
+  notificationUrgency: ServiceUrgency
   onCallUsers: ServiceOnCallUser[]
   recentEvents: AlertLogEntryConnection
 }
@@ -1122,6 +1124,8 @@ export interface ServiceSearchOptions {
   only?: null | string[]
   search?: null | string
 }
+
+export type ServiceUrgency = 'high' | 'low'
 
 export interface SetAlertNoiseReasonInput {
   alertID: number
@@ -1385,6 +1389,7 @@ export interface UpdateServiceInput {
   id: string
   maintenanceExpiresAt?: null | ISOTimestamp
   name?: null | string
+  notificationUrgency?: null | ServiceUrgency
 }
 
 export interface UpdateUserCalendarSubscriptionInput {

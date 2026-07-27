@@ -3,7 +3,7 @@ import { gql, useQuery, useMutation } from 'urql'
 
 import FormDialog from '../dialogs/FormDialog'
 import ServiceForm from './ServiceForm'
-import { Label } from '../../schema'
+import { Label, ServiceUrgency } from '../../schema'
 import { useErrorConsumer } from '../util/ErrorConsumer'
 import { useConfigValue } from '../util/RequireConfig'
 
@@ -11,6 +11,7 @@ interface Value {
   name: string
   description: string
   escalationPolicyID?: string
+  notificationUrgency?: ServiceUrgency
   labels: Label[]
 }
 
@@ -20,6 +21,7 @@ const query = gql`
       id
       name
       description
+      notificationUrgency
       labels {
         key
         value
@@ -55,6 +57,7 @@ export default function ServiceEditDialog(props: {
     name: data?.service?.name,
     description: data?.service?.description,
     escalationPolicyID: data?.service?.ep?.id,
+    notificationUrgency: data?.service?.notificationUrgency,
     labels: (data?.service?.labels || []).filter((l: Label) =>
       req.includes(l.key),
     ),
@@ -81,6 +84,7 @@ export default function ServiceEditDialog(props: {
               name: value?.name || '',
               description: value?.description || '',
               escalationPolicyID: value?.escalationPolicyID || '',
+              notificationUrgency: value?.notificationUrgency || 'high',
             },
           },
           {

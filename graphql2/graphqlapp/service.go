@@ -216,6 +216,9 @@ func (m *Mutation) CreateService(ctx context.Context, input graphql2.CreateServi
 		if input.Description != nil {
 			svc.Description = *input.Description
 		}
+		if input.NotificationUrgency != nil {
+			svc.NotificationUrgency = *input.NotificationUrgency
+		}
 		if input.NewEscalationPolicy != nil {
 			// Set tempUUID so that Normalize won't fail on the yet-to-be-created
 			// escalation policy.
@@ -311,6 +314,10 @@ func (a *Mutation) UpdateService(ctx context.Context, input graphql2.UpdateServi
 
 	if input.MaintenanceExpiresAt != nil {
 		svc.MaintenanceExpiresAt = *input.MaintenanceExpiresAt
+	}
+
+	if input.NotificationUrgency != nil {
+		svc.NotificationUrgency = *input.NotificationUrgency
 	}
 
 	err = a.ServiceStore.UpdateTx(ctx, tx, svc)

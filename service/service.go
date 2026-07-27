@@ -12,6 +12,7 @@ type Service struct {
 	Description          string
 	EscalationPolicyID   string
 	MaintenanceExpiresAt time.Time
+	NotificationUrgency  Urgency
 
 	epName         string
 	isUserFavorite bool
@@ -37,11 +38,18 @@ func (s Service) Normalize() (*Service, error) {
 		s.MaintenanceExpiresAt = time.Time{}
 	}
 
+	// An empty value means the service predates urgency, or the caller didn't
+	// set it -- either way it is high urgency.
+	if s.NotificationUrgency == "" {
+		s.NotificationUrgency = UrgencyHigh
+	}
+
 	err := validate.Many(
 		validate.IDName("Name", s.Name),
 		validate.Text("Description", s.Description, 1, MaxDetailsLength),
 		validate.UUID("EscalationPolicyID", s.EscalationPolicyID),
 		validate.Duration("MaintenanceExpiresAt", dur, 0, 24*time.Hour+5*time.Minute),
+		validate.OneOf("NotificationUrgency", s.NotificationUrgency, UrgencyHigh, UrgencyLow),
 	)
 	if err != nil {
 		return nil, err

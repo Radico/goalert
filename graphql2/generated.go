@@ -724,6 +724,7 @@ type ComplexityRoot struct {
 		MaintenanceExpiresAt func(childComplexity int) int
 		Name                 func(childComplexity int) int
 		Notices              func(childComplexity int) int
+		NotificationUrgency  func(childComplexity int) int
 		OnCallUsers          func(childComplexity int) int
 		RecentEvents         func(childComplexity int, input *AlertRecentEventsOptions) int
 	}
@@ -4325,6 +4326,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Service.Notices(childComplexity), true
+	case "Service.notificationUrgency":
+		if e.ComplexityRoot.Service.NotificationUrgency == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Service.NotificationUrgency(childComplexity), true
 	case "Service.onCallUsers":
 		if e.ComplexityRoot.Service.OnCallUsers == nil {
 			break
@@ -6107,6 +6114,8 @@ func (ec *executionContext) childFields_Service(ctx context.Context, field graph
 		return ec.fieldContext_Service_isFavorite(ctx, field)
 	case "maintenanceExpiresAt":
 		return ec.fieldContext_Service_maintenanceExpiresAt(ctx, field)
+	case "notificationUrgency":
+		return ec.fieldContext_Service_notificationUrgency(ctx, field)
 	case "onCallUsers":
 		return ec.fieldContext_Service_onCallUsers(ctx, field)
 	case "integrationKeys":
@@ -20891,6 +20900,29 @@ func (ec *executionContext) fieldContext_Service_maintenanceExpiresAt(_ context.
 	return graphql.NewScalarFieldContext("Service", field, false, false, errors.New("field of type ISOTimestamp does not have child fields"))
 }
 
+func (ec *executionContext) _Service_notificationUrgency(ctx context.Context, field graphql.CollectedField, obj *service.Service) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Service_notificationUrgency(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NotificationUrgency, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v service.Urgency) graphql.Marshaler {
+			return ec.marshalNServiceUrgency2githubᚗcomᚋtargetᚋgoalertᚋserviceᚐUrgency(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Service_notificationUrgency(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Service", field, false, false, errors.New("field of type ServiceUrgency does not have child fields"))
+}
+
 func (ec *executionContext) _Service_onCallUsers(ctx context.Context, field graphql.CollectedField, obj *service.Service) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -25829,7 +25861,7 @@ func (ec *executionContext) unmarshalInputCreateServiceInput(ctx context.Context
 		asMap["description"] = ""
 	}
 
-	fieldsInOrder := [...]string{"name", "description", "favorite", "escalationPolicyID", "newEscalationPolicy", "newIntegrationKeys", "labels", "newHeartbeatMonitors"}
+	fieldsInOrder := [...]string{"name", "description", "favorite", "escalationPolicyID", "notificationUrgency", "newEscalationPolicy", "newIntegrationKeys", "labels", "newHeartbeatMonitors"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -25864,6 +25896,13 @@ func (ec *executionContext) unmarshalInputCreateServiceInput(ctx context.Context
 				return it, err
 			}
 			it.EscalationPolicyID = data
+		case "notificationUrgency":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("notificationUrgency"))
+			data, err := ec.unmarshalOServiceUrgency2ᚖgithubᚗcomᚋtargetᚋgoalertᚋserviceᚐUrgency(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NotificationUrgency = data
 		case "newEscalationPolicy":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("newEscalationPolicy"))
 			data, err := ec.unmarshalOCreateEscalationPolicyInput2ᚖgithubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐCreateEscalationPolicyInput(ctx, v)
@@ -28737,7 +28776,7 @@ func (ec *executionContext) unmarshalInputUpdateServiceInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"id", "name", "description", "escalationPolicyID", "maintenanceExpiresAt"}
+	fieldsInOrder := [...]string{"id", "name", "description", "escalationPolicyID", "maintenanceExpiresAt", "notificationUrgency"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -28779,6 +28818,13 @@ func (ec *executionContext) unmarshalInputUpdateServiceInput(ctx context.Context
 				return it, err
 			}
 			it.MaintenanceExpiresAt = data
+		case "notificationUrgency":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("notificationUrgency"))
+			data, err := ec.unmarshalOServiceUrgency2ᚖgithubᚗcomᚋtargetᚋgoalertᚋserviceᚐUrgency(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NotificationUrgency = data
 		}
 	}
 	return it, nil
@@ -36562,6 +36608,11 @@ func (ec *executionContext) _Service(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "notificationUrgency":
+			out.Values[i] = ec._Service_notificationUrgency(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "onCallUsers":
 			field := field
 
@@ -41091,6 +41142,23 @@ func (ec *executionContext) marshalNServiceOnCallUser2ᚕgithubᚗcomᚋtarget�
 	return ret
 }
 
+func (ec *executionContext) unmarshalNServiceUrgency2githubᚗcomᚋtargetᚋgoalertᚋserviceᚐUrgency(ctx context.Context, v any) (service.Urgency, error) {
+	tmp, err := graphql.UnmarshalString(v)
+	res := service.Urgency(tmp)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNServiceUrgency2githubᚗcomᚋtargetᚋgoalertᚋserviceᚐUrgency(ctx context.Context, sel ast.SelectionSet, v service.Urgency) graphql.Marshaler {
+	_ = sel
+	res := graphql.MarshalString(string(v))
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+	}
+	return res
+}
+
 func (ec *executionContext) unmarshalNSetAlertNoiseReasonInput2githubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐSetAlertNoiseReasonInput(ctx context.Context, v any) (SetAlertNoiseReasonInput, error) {
 	res, err := ec.unmarshalInputSetAlertNoiseReasonInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -42791,6 +42859,25 @@ func (ec *executionContext) unmarshalOServiceSearchOptions2ᚖgithubᚗcomᚋtar
 	}
 	res, err := ec.unmarshalInputServiceSearchOptions(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOServiceUrgency2ᚖgithubᚗcomᚋtargetᚋgoalertᚋserviceᚐUrgency(ctx context.Context, v any) (*service.Urgency, error) {
+	if v == nil {
+		return nil, nil
+	}
+	tmp, err := graphql.UnmarshalString(v)
+	res := service.Urgency(tmp)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOServiceUrgency2ᚖgithubᚗcomᚋtargetᚋgoalertᚋserviceᚐUrgency(ctx context.Context, sel ast.SelectionSet, v *service.Urgency) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	_ = sel
+	_ = ctx
+	res := graphql.MarshalString(string(*v))
+	return res
 }
 
 func (ec *executionContext) unmarshalOSetLabelInput2ᚕgithubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐSetLabelInputᚄ(ctx context.Context, v any) ([]SetLabelInput, error) {

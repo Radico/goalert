@@ -149,7 +149,8 @@ func NewStore(ctx context.Context, db *sql.DB, logDB *alertlog.Store) (*Store, e
 				state.force_escalation = false AND
 				a.id = state.alert_id AND
 				svc.id = a.service_id AND
-				svc.maintenance_expires_at ISNULL
+				svc.maintenance_expires_at ISNULL AND
+				svc.notification_urgency != 'low'
 			RETURNING state.alert_id
 		`),
 
@@ -257,6 +258,9 @@ func (s *Store) EscalateAsOf(ctx context.Context, id int, t time.Time) error {
 	}
 	if lck.IsMaintMode {
 		return validation.NewGenericError("service is in maintenance mode")
+	}
+	if lck.IsLowUrgency {
+		return validation.NewGenericError("service is low urgency, notifications are disabled")
 	}
 
 	if t.IsZero() {

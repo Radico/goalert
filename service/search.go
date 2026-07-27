@@ -52,7 +52,8 @@ var searchTemplate = template.Must(template.New("search").Funcs(search.Helpers()
 		svc.description,
 		svc.escalation_policy_id,
 		fav IS DISTINCT FROM NULL,
-		svc.maintenance_expires_at
+		svc.maintenance_expires_at,
+		svc.notification_urgency
 	FROM services svc
 	{{if not .FavoritesOnly }}LEFT {{end}}JOIN user_favorites fav ON svc.id = fav.tgt_service_id AND {{if .FavoritesUserID}}fav.user_id = :favUserID{{else}}false{{end}}
 	{{if and .IntegrationKey}}
@@ -244,7 +245,7 @@ func (s *Store) Search(ctx context.Context, opts *SearchOptions) ([]Service, err
 	for rows.Next() {
 		var s Service
 		var maintExpiresAt sql.NullTime
-		err = rows.Scan(&s.ID, &s.Name, &s.Description, &s.EscalationPolicyID, &s.isUserFavorite, &maintExpiresAt)
+		err = rows.Scan(&s.ID, &s.Name, &s.Description, &s.EscalationPolicyID, &s.isUserFavorite, &maintExpiresAt, &s.NotificationUrgency)
 		if err != nil {
 			return nil, err
 		}
