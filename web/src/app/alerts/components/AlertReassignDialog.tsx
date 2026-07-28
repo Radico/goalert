@@ -10,6 +10,11 @@ const updateMutation = gql`
   mutation UpdateAlertsMutation($input: UpdateAlertsInput!) {
     updateAlerts(input: $input) {
       id
+      assignedUser {
+        id
+        name
+      }
+      assignmentSource
     }
   }
 `
@@ -18,12 +23,21 @@ interface AlertReassignDialogProps {
   open: boolean
   onClose: () => void
   alertIDs: Array<string>
+
+  /*
+   * Called after a successful assignment.
+   *
+   * This dialog commits through urql, so callers reading the alert through a
+   * different GraphQL client (the alert detail page uses Apollo) must refetch
+   * here or they will keep showing the old assignee.
+   */
+  onSuccess?: () => void
 }
 
 export default function AlertReassignDialog(
   props: AlertReassignDialogProps,
 ): React.JSX.Element | null {
-  const { alertIDs, open, onClose } = props
+  const { alertIDs, open, onClose, onSuccess } = props
 
   const [value, setValue] = useState<{ assignedUserID: string }>({
     assignedUserID: '',
@@ -50,6 +64,7 @@ export default function AlertReassignDialog(
       })
 
       setValue({ assignedUserID: '' })
+      onSuccess?.()
       onClose()
     })
   }

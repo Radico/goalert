@@ -552,6 +552,22 @@ function testAlerts(screen: ScreenFormat): void {
       cy.get('[data-cy=alert-assignee]').should('not.exist')
     })
 
+    it('should assign from the alert detail page', () => {
+      cy.visit(`/alerts/${alert.id}`)
+
+      cy.get('[data-cy=alert-assignee]').should('contain', 'unclaimed')
+
+      cy.get('button[aria-label="Assign Alert"]').click()
+      cy.dialogTitle('Assign Alerts')
+      cy.dialogForm({ assignedUserID: otherUser.name })
+      cy.dialogFinish('Assign')
+
+      // no reload: the page must refetch itself after the dialog commits
+      cy.get('[data-cy=alert-assignee]')
+        .should('contain', 'Assigned to')
+        .should('contain', otherUser.name)
+    })
+
     it('should filter by assigned user', () => {
       cy.visit('/alerts?allServices=1')
 
