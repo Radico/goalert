@@ -89,7 +89,12 @@ type AlertSearchOptions struct {
 	NotClosedBefore   *time.Time       `json:"notClosedBefore,omitempty"`
 	// Restrict results to alerts assigned to this user, either explicitly or by
 	// them being on-call for the alert's current escalation step.
+	//
+	// Takes precedence over includeAssigned.
 	AssignedUserID *string `json:"assignedUserID,omitempty"`
+	// Additionally include alerts assigned to the current user, the same way
+	// includeNotified works. Ignored when assignedUserID is set.
+	IncludeAssigned *bool `json:"includeAssigned,omitempty"`
 }
 
 // AlertStats returns aggregated statistics about alerts.

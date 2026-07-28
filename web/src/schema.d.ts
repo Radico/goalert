@@ -97,6 +97,7 @@ export interface AlertSearchOptions {
   filterByServiceID?: null | string[]
   filterByStatus?: null | AlertStatus[]
   first?: null | number
+  includeAssigned?: null | boolean
   includeNotified?: null | boolean
   notClosedBefore?: null | ISOTimestamp
   notCreatedBefore?: null | ISOTimestamp
