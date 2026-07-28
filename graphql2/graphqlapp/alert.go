@@ -251,8 +251,13 @@ func (q *Query) Alerts(ctx context.Context, opts *graphql2.AlertSearchOptions) (
 	if opts.IncludeNotified != nil && *opts.IncludeNotified {
 		s.NotifiedUserID = permission.UserID(ctx)
 	}
-	if opts.AssignedUserID != nil && config.FromContext(ctx).General.EnableAlertAssignment {
-		s.AssignedUserID = *opts.AssignedUserID
+	if config.FromContext(ctx).General.EnableAlertAssignment {
+		if opts.AssignedUserID != nil {
+			s.AssignedUserID = *opts.AssignedUserID
+		}
+		if opts.IncludeAssigned != nil && *opts.IncludeAssigned {
+			s.IncludeAssignedUserID = permission.UserID(ctx)
+		}
 	}
 
 	err = validate.Many(

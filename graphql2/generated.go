@@ -24856,8 +24856,11 @@ func (ec *executionContext) unmarshalInputAlertSearchOptions(ctx context.Context
 	if _, present := asMap["sort"]; !present {
 		asMap["sort"] = "statusID"
 	}
+	if _, present := asMap["includeAssigned"]; !present {
+		asMap["includeAssigned"] = false
+	}
 
-	fieldsInOrder := [...]string{"filterByStatus", "filterByServiceID", "search", "first", "after", "favoritesOnly", "includeNotified", "omit", "sort", "createdBefore", "notCreatedBefore", "closedBefore", "notClosedBefore", "assignedUserID"}
+	fieldsInOrder := [...]string{"filterByStatus", "filterByServiceID", "search", "first", "after", "favoritesOnly", "includeNotified", "omit", "sort", "createdBefore", "notCreatedBefore", "closedBefore", "notClosedBefore", "assignedUserID", "includeAssigned"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -24962,6 +24965,13 @@ func (ec *executionContext) unmarshalInputAlertSearchOptions(ctx context.Context
 				return it, err
 			}
 			it.AssignedUserID = data
+		case "includeAssigned":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("includeAssigned"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.IncludeAssigned = data
 		}
 	}
 	return it, nil

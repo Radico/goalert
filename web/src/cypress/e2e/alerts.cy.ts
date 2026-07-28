@@ -552,13 +552,30 @@ function testAlerts(screen: ScreenFormat): void {
       cy.get('[data-cy=alert-assignee]').should('not.exist')
     })
 
-    it('should offer an assigned to me filter', () => {
+    it('should filter by assigned user', () => {
       cy.visit('/alerts?allServices=1')
 
       cy.get('button[aria-label="Filter Alerts"]').click()
-      cy.get('span[data-cy=toggle-assigned-to-me]').click()
+      cy.get('button[data-cy=filter-assigned-to-me]').click()
 
-      cy.url().should('contain', 'assignedToMe=1')
+      cy.url().should('contain', 'assignedUserID=')
+    })
+
+    it('should badge an explicitly assigned alert in a service alert list', () => {
+      cy.visit(`/alerts?allServices=1&search=${svc.name}`)
+
+      // unclaimed alerts derive an on-call assignee but are not badged
+      cy.get('[data-cy=alert-assignee-badge]').should('not.exist')
+
+      cy.get(`span[data-cy=item-${alert.id}] input`).check()
+      cy.get('button[aria-label=Assign]').click()
+      cy.dialogTitle('Assign Alerts')
+      cy.dialogForm({ assignedUserID: otherUser.name })
+      cy.dialogFinish('Assign')
+
+      // the badge follows the alert into the service's own alert list
+      cy.visit(`/services/${svc.id}/alerts`)
+      cy.get('[data-cy=alert-assignee-badge]').should('contain', otherUser.name)
     })
   })
 }

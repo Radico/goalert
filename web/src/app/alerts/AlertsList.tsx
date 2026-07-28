@@ -21,9 +21,10 @@ import ServiceNotices from '../services/ServiceNotices'
 import { Time } from '../util/Time'
 import { NotificationContext } from '../main/SnackbarNotification'
 import ReactGA from 'react-ga4'
-import { useConfigValue, useSessionInfo } from '../util/RequireConfig'
+import { useConfigValue } from '../util/RequireConfig'
 import AlertFeedbackDialog from './components/AlertFeedbackDialog'
 import AlertReassignDialog from './components/AlertReassignDialog'
+import AlertAssigneeBadge from './components/AlertAssigneeBadge'
 import { Target } from 'web/src/schema'
 
 type AlertsListProps = {
@@ -98,26 +99,6 @@ const useStyles = makeStyles({
   },
 })
 
-interface AlertAssignee {
-  assignedUser?: { id: string; name: string } | null
-  assignmentSource?: string
-}
-
-/*
- * Renders the assignee as a suffix on the list row.
- *
- * The source matters as much as the name: "on-call" means nobody has picked the
- * alert up yet and it will move as the alert escalates, while "assigned"
- * means someone owns it.
- */
-export function formatAssignee(enabled: boolean, a: AlertAssignee): string {
-  if (!enabled || !a.assignedUser) return ''
-  if (a.assignmentSource === 'explicit') {
-    return ` — assigned to ${a.assignedUser.name}`
-  }
-  return ` — on-call: ${a.assignedUser.name}`
-}
-
 function getStatusFilter(s: string): string[] {
   switch (s) {
     case 'acknowledged':
@@ -155,12 +136,11 @@ export default function AlertsList(props: AlertsListProps): React.JSX.Element {
   const [allServices] = useURLParam('allServices', false)
   const [fullTime] = useURLParam('fullTime', false)
   const [filter] = useURLParam<string>('filter', 'active')
-  const [assignedToMe] = useURLParam('assignedToMe', false)
+  const [assignedUserFilter] = useURLParam<string>('assignedUserID', '')
 
   const [assignmentEnabled] = useConfigValue(
     'General.EnableAlertAssignment',
   ) as [boolean]
-  const { userID: currentUserID } = useSessionInfo()
 
   const serviceID = 'serviceID' in props ? props.serviceID : ''
   const policyID = 'policyID' in props ? props.policyID : ''
@@ -207,9 +187,9 @@ export default function AlertsList(props: AlertsListProps): React.JSX.Element {
     .filter((a: Target) => a.type === 'service')
     .map((a: Target) => a.id)
 
-  // only filter by assignee when the feature is on and we know who we are
+  // an explicit assignee filter only applies when the feature is on
   const assignedUserID =
-    assignmentEnabled && assignedToMe && currentUserID ? currentUserID : null
+    assignmentEnabled && assignedUserFilter ? assignedUserFilter : null
 
   // alerts list query variables
   const variables = {
@@ -217,11 +197,16 @@ export default function AlertsList(props: AlertsListProps): React.JSX.Element {
       filterByStatus: getStatusFilter(filter),
       first: 25,
       // default to favorites only, unless viewing alerts from a service or
-      // policy page. Filtering by assignee is already restrictive and spans
-      // every service, so favorites must not narrow it further -- otherwise
-      // alerts assigned to you on an unfavorited service would be hidden.
+      // policy page. An explicit assignee filter is already restrictive and
+      // spans every service, so favorites must not narrow it further --
+      // otherwise alerts assigned to you on an unfavorited service would be
+      // hidden.
       favoritesOnly: !assignedUserID && !serviceID && !policyID && !allServices,
       includeNotified: !serviceID && !policyID, // keep service list alerts specific to that service,
+      // On the overview, surface alerts assigned to you *alongside* your
+      // favorites rather than instead of them -- the same additive treatment
+      // includeNotified gets, so nothing previously visible disappears.
+      includeAssigned: assignmentEnabled && !serviceID && !policyID,
       filterByServiceID: serviceID
         ? [serviceID]
         : policyID
@@ -400,10 +385,12 @@ export default function AlertsList(props: AlertsListProps): React.JSX.Element {
               title: `${a.alertID}: ${a.status
                 .toUpperCase()
                 .replace('STATUS', '')}`,
-              subText:
-                (serviceID ? '' : a.service.name + ': ') +
-                a.summary +
-                formatAssignee(assignmentEnabled, a),
+              subText: (
+                <React.Fragment>
+                  {(serviceID ? '' : a.service.name + ': ') + a.summary}
+                  <AlertAssigneeBadge alert={a} enabled={assignmentEnabled} />
+                </React.Fragment>
+              ),
               action: (
                 <ListItemText
                   className={classes.alertTimeContainer}

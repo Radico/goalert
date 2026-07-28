@@ -312,6 +312,67 @@ func TestAlertAssignmentFilter(t *testing.T) {
 		"user2 should see only the alert they were assigned")
 }
 
+// TestAlertAssignmentIncludeAssigned verifies that includeAssigned is additive,
+// the same way includeNotified is: it widens a favorites-scoped list to also
+// show alerts belonging to you, rather than narrowing the list to only those.
+//
+// This is what backs the alert list default, so getting it wrong would either
+// hide the team's alerts or fail to surface your own.
+func TestAlertAssignmentIncludeAssigned(t *testing.T) {
+	t.Parallel()
+
+	h := harness.NewHarness(t, twoStepEPSQL, "add-alert-assigned-user")
+	defer h.Close()
+
+	h.SetConfigValue("General.EnableAlertAssignment", "true")
+
+	d1 := h.Twilio(t).Device(h.Phone("1"))
+
+	a := h.CreateAlert(h.UUID("sid"), "mine but not favorited")
+	d1.ExpectSMS("mine but not favorited")
+
+	// user1 has favorited nothing, so a favorites-scoped list is empty unless
+	// something widens it.
+	query := func(extra string) []int {
+		t.Helper()
+		g := h.GraphQLQueryUserT(t, h.UUID("user1"), fmt.Sprintf(`
+			query {
+				alerts(input: { favoritesOnly: true, first: 100, %s }) {
+					nodes { alertID }
+				}
+			}
+		`, extra))
+		for _, err := range g.Errors {
+			t.Fatal("GraphQL Error:", err.Message)
+		}
+
+		var res struct {
+			Alerts struct {
+				Nodes []struct{ AlertID int }
+			}
+		}
+		require.NoError(t, json.Unmarshal(g.Data, &res))
+
+		ids := make([]int, 0, len(res.Alerts.Nodes))
+		for _, n := range res.Alerts.Nodes {
+			ids = append(ids, n.AlertID)
+		}
+		return ids
+	}
+
+	assert.Empty(t, query("includeAssigned: false"),
+		"favorites-only should be empty when nothing is favorited")
+	assert.ElementsMatch(t, []int{a.ID()}, query("includeAssigned: true"),
+		"includeAssigned should widen the list to alerts assigned to you")
+
+	// An explicit assignee filter is restrictive and supersedes the additive
+	// include, so filtering to somebody else must not fall back to showing
+	// your own alerts.
+	assert.Empty(t,
+		query(fmt.Sprintf(`includeAssigned: true, assignedUserID: "%s"`, h.UUID("user2"))),
+		"an explicit assignee filter must take precedence over includeAssigned")
+}
+
 // TestAlertAssignmentDisabled verifies the feature ships dark: with the config
 // key off, alerts report no assignee and the mutation is rejected.
 func TestAlertAssignmentDisabled(t *testing.T) {
