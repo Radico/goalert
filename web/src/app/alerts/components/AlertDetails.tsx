@@ -19,8 +19,9 @@ import {
   ArrowUpward as EscalateIcon,
   Check as AcknowledgeIcon,
   Close as CloseIcon,
+  PersonAdd as AssignIcon,
 } from '@mui/icons-material'
-import { gql, useMutation } from '@apollo/client'
+import { gql, useMutation, useApolloClient } from '@apollo/client'
 import { DateTime } from 'luxon'
 import { ServiceLink } from '../../links'
 import { styles as globalStyles } from '../../styles/materialStyles'
@@ -40,6 +41,7 @@ import { useIsWidthDown } from '../../util/useWidth'
 import ReactGA from 'react-ga4'
 import { useConfigValue } from '../../util/RequireConfig'
 import { renderChipsDest } from '../../escalation-policies/stepUtil'
+import AlertReassignDialog from './AlertReassignDialog'
 interface AlertDetailsProps {
   data: Alert
 }
@@ -84,6 +86,8 @@ export default function AlertDetails(
   ) as [boolean]
   const classes = useStyles()
   const isMobile = useIsWidthDown('sm')
+  const [showAssignDialog, setShowAssignDialog] = useState(false)
+  const apollo = useApolloClient()
 
   /*
    * Distinguishes an alert nobody has picked up yet -- where the assignee is
@@ -339,6 +343,15 @@ export default function AlertDetails(
         >
           Close
         </Button>
+        {assignmentEnabled && (
+          <Button
+            startIcon={<AssignIcon />}
+            aria-label='Assign Alert'
+            onClick={() => setShowAssignDialog(true)}
+          >
+            Assign
+          </Button>
+        )}
       </ButtonGroup>,
     ]
   }
@@ -516,6 +529,17 @@ export default function AlertDetails(
           </CardContent>
         </Card>
       </Grid>
+      <AlertReassignDialog
+        open={showAssignDialog}
+        onClose={() => setShowAssignDialog(false)}
+        alertIDs={[alert.alertID.toString()]}
+        onSuccess={() => {
+          // The dialog commits through urql, which cannot update this page's
+          // Apollo cache -- without this the assignee and the log below would
+          // keep showing the pre-assignment state until a reload.
+          apollo.refetchQueries({ include: ['AlertDetailsPageQuery'] })
+        }}
+      />
     </Grid>
   )
 }
