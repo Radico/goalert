@@ -501,7 +501,11 @@ export default function AlertDetails(
 
       {/* Comments -- user-authored, kept above the system Event Log */}
       <Grid item xs={12} className={classes.cardContainer}>
-        <AlertComments alertID={alert.alertID} />
+        <AlertComments
+          alertID={alert.alertID}
+          showExactTimes={showExactTimes}
+          onToggleExactTimes={handleToggleExactTimes}
+        />
       </Grid>
 
       {/* Alert Logs */}
