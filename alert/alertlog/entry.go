@@ -170,6 +170,8 @@ func (e Entry) String(ctx context.Context) string {
 		msg = "Suppressed duplicate: created"
 	case TypeEscalationRequest:
 		msg = "Escalation requested"
+	case TypeAssignmentChanged:
+		msg = "Assignment changed"
 	default:
 		return "Error"
 	}

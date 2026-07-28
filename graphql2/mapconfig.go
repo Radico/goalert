@@ -34,6 +34,7 @@ func MapConfigValues(cfg config.Config) []ConfigValue {
 		{ID: "General.DisableSMSLinks", Type: ConfigTypeBoolean, Description: "If set, SMS messages will not contain a URL pointing to GoAlert.", Value: fmt.Sprintf("%t", cfg.General.DisableSMSLinks)},
 		{ID: "General.DisableLabelCreation", Type: ConfigTypeBoolean, Description: "Disables the ability to create new labels for services.", Value: fmt.Sprintf("%t", cfg.General.DisableLabelCreation)},
 		{ID: "General.DisableCalendarSubscriptions", Type: ConfigTypeBoolean, Description: "If set, disables all active calendar subscriptions as well as the ability to create new calendar subscriptions.", Value: fmt.Sprintf("%t", cfg.General.DisableCalendarSubscriptions)},
+		{ID: "General.EnableAlertAssignment", Type: ConfigTypeBoolean, Description: "If set, alerts track an assigned user: unclaimed alerts show the current on-call user, acknowledging claims ownership, and alerts can be re-assigned. Does not affect notification routing.", Value: fmt.Sprintf("%t", cfg.General.EnableAlertAssignment)},
 		{ID: "Services.RequiredLabels", Type: ConfigTypeStringList, Description: "List of label names to require new services to define.", Value: strings.Join(cfg.Services.RequiredLabels, "\n")},
 		{ID: "Maintenance.AlertCleanupDays", Type: ConfigTypeInteger, Description: "Closed alerts will be deleted after this many days (0 means disable cleanup).", Value: fmt.Sprintf("%d", cfg.Maintenance.AlertCleanupDays)},
 		{ID: "Maintenance.AlertAutoCloseDays", Type: ConfigTypeInteger, Description: "Unacknowledged alerts will automatically be closed after this many days of inactivity. (0 means disable auto-close).", Value: fmt.Sprintf("%d", cfg.Maintenance.AlertAutoCloseDays)},
@@ -107,6 +108,7 @@ func MapPublicConfigValues(cfg config.Config) []ConfigValue {
 		{ID: "General.DisableSMSLinks", Type: ConfigTypeBoolean, Description: "If set, SMS messages will not contain a URL pointing to GoAlert.", Value: fmt.Sprintf("%t", cfg.General.DisableSMSLinks)},
 		{ID: "General.DisableLabelCreation", Type: ConfigTypeBoolean, Description: "Disables the ability to create new labels for services.", Value: fmt.Sprintf("%t", cfg.General.DisableLabelCreation)},
 		{ID: "General.DisableCalendarSubscriptions", Type: ConfigTypeBoolean, Description: "If set, disables all active calendar subscriptions as well as the ability to create new calendar subscriptions.", Value: fmt.Sprintf("%t", cfg.General.DisableCalendarSubscriptions)},
+		{ID: "General.EnableAlertAssignment", Type: ConfigTypeBoolean, Description: "If set, alerts track an assigned user: unclaimed alerts show the current on-call user, acknowledging claims ownership, and alerts can be re-assigned. Does not affect notification routing.", Value: fmt.Sprintf("%t", cfg.General.EnableAlertAssignment)},
 		{ID: "Services.RequiredLabels", Type: ConfigTypeStringList, Description: "List of label names to require new services to define.", Value: strings.Join(cfg.Services.RequiredLabels, "\n")},
 		{ID: "Maintenance.AlertCleanupDays", Type: ConfigTypeInteger, Description: "Closed alerts will be deleted after this many days (0 means disable cleanup).", Value: fmt.Sprintf("%d", cfg.Maintenance.AlertCleanupDays)},
 		{ID: "Maintenance.AlertAutoCloseDays", Type: ConfigTypeInteger, Description: "Unacknowledged alerts will automatically be closed after this many days of inactivity. (0 means disable auto-close).", Value: fmt.Sprintf("%d", cfg.Maintenance.AlertAutoCloseDays)},
@@ -195,6 +197,12 @@ func ApplyConfigValues(cfg config.Config, vals []ConfigValueInput) (config.Confi
 				return cfg, err
 			}
 			cfg.General.DisableCalendarSubscriptions = val
+		case "General.EnableAlertAssignment":
+			val, err := parseBool(v.ID, v.Value)
+			if err != nil {
+				return cfg, err
+			}
+			cfg.General.EnableAlertAssignment = val
 		case "Services.RequiredLabels":
 			cfg.Services.RequiredLabels = parseStringList(v.Value)
 		case "Maintenance.AlertCleanupDays":

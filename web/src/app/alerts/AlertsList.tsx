@@ -7,6 +7,7 @@ import {
   ArrowUpward as EscalateIcon,
   Check as AcknowledgeIcon,
   Close as CloseIcon,
+  PersonAdd as AssignIcon,
   ThumbDownOffAlt,
 } from '@mui/icons-material'
 
@@ -22,6 +23,8 @@ import { NotificationContext } from '../main/SnackbarNotification'
 import ReactGA from 'react-ga4'
 import { useConfigValue } from '../util/RequireConfig'
 import AlertFeedbackDialog from './components/AlertFeedbackDialog'
+import AlertReassignDialog from './components/AlertReassignDialog'
+import AlertAssigneeBadge from './components/AlertAssigneeBadge'
 import { Target } from 'web/src/schema'
 
 type AlertsListProps = {
@@ -57,6 +60,11 @@ export const alertsListQuery = gql`
           id
           name
         }
+        assignedUser {
+          id
+          name
+        }
+        assignmentSource
       }
 
       pageInfo {
@@ -118,12 +126,21 @@ export default function AlertsList(props: AlertsListProps): React.JSX.Element {
   const [showFeedbackDialog, setShowFeedbackDialog] = useState<Array<string>>(
     [],
   )
+  // stores alertIDs, if length present, reassign dialog is shown
+  const [showReassignDialog, setShowReassignDialog] = useState<Array<string>>(
+    [],
+  )
   const [selectedCount, setSelectedCount] = useState(0)
   const [checkedCount, setCheckedCount] = useState(0)
 
   const [allServices] = useURLParam('allServices', false)
   const [fullTime] = useURLParam('fullTime', false)
   const [filter] = useURLParam<string>('filter', 'active')
+  const [assignedUserFilter] = useURLParam<string>('assignedUserID', '')
+
+  const [assignmentEnabled] = useConfigValue(
+    'General.EnableAlertAssignment',
+  ) as [boolean]
 
   const serviceID = 'serviceID' in props ? props.serviceID : ''
   const policyID = 'policyID' in props ? props.policyID : ''
@@ -170,19 +187,32 @@ export default function AlertsList(props: AlertsListProps): React.JSX.Element {
     .filter((a: Target) => a.type === 'service')
     .map((a: Target) => a.id)
 
+  // an explicit assignee filter only applies when the feature is on
+  const assignedUserID =
+    assignmentEnabled && assignedUserFilter ? assignedUserFilter : null
+
   // alerts list query variables
   const variables = {
     input: {
       filterByStatus: getStatusFilter(filter),
       first: 25,
-      // default to favorites only, unless viewing alerts from a service or policy page
-      favoritesOnly: !serviceID && !policyID && !allServices,
+      // default to favorites only, unless viewing alerts from a service or
+      // policy page. An explicit assignee filter is already restrictive and
+      // spans every service, so favorites must not narrow it further --
+      // otherwise alerts assigned to you on an unfavorited service would be
+      // hidden.
+      favoritesOnly: !assignedUserID && !serviceID && !policyID && !allServices,
       includeNotified: !serviceID && !policyID, // keep service list alerts specific to that service,
+      // On the overview, surface alerts assigned to you *alongside* your
+      // favorites rather than instead of them -- the same additive treatment
+      // includeNotified gets, so nothing previously visible disappears.
+      includeAssigned: assignmentEnabled && !serviceID && !policyID,
       filterByServiceID: serviceID
         ? [serviceID]
         : policyID
           ? policyServiceIDs
           : null,
+      assignedUserID,
     },
   }
 
@@ -320,6 +350,16 @@ export default function AlertsList(props: AlertsListProps): React.JSX.Element {
       }
     }
 
+    if (assignmentEnabled && filter !== 'closed') {
+      actions.push({
+        icon: <AssignIcon />,
+        label: 'Assign',
+        onClick: (alertIDs: (string | number)[]) => {
+          setShowReassignDialog(alertIDs.map((id) => id.toString()))
+        },
+      })
+    }
+
     actions.push({
       icon: <ThumbDownOffAlt />,
       label: 'Mark as Noise',
@@ -345,7 +385,12 @@ export default function AlertsList(props: AlertsListProps): React.JSX.Element {
               title: `${a.alertID}: ${a.status
                 .toUpperCase()
                 .replace('STATUS', '')}`,
-              subText: (serviceID ? '' : a.service.name + ': ') + a.summary,
+              subText: (
+                <React.Fragment>
+                  {(serviceID ? '' : a.service.name + ': ') + a.summary}
+                  <AlertAssigneeBadge alert={a} enabled={assignmentEnabled} />
+                </React.Fragment>
+              ),
               action: (
                 <ListItemText
                   className={classes.alertTimeContainer}
@@ -396,6 +441,13 @@ export default function AlertsList(props: AlertsListProps): React.JSX.Element {
           setShowFeedbackDialog([])
         }}
         alertIDs={showFeedbackDialog}
+      />
+      <AlertReassignDialog
+        open={showReassignDialog.length > 0}
+        onClose={() => {
+          setShowReassignDialog([])
+        }}
+        alertIDs={showReassignDialog}
       />
     </React.Fragment>
   )

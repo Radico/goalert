@@ -12,6 +12,8 @@ export interface ActionInput {
 
 export interface Alert {
   alertID: number
+  assignedUser?: null | User
+  assignmentSource: AlertAssignmentSource
   createdAt: ISOTimestamp
   details: string
   id: string
@@ -27,6 +29,8 @@ export interface Alert {
   status: AlertStatus
   summary: string
 }
+
+export type AlertAssignmentSource = 'explicit' | 'onCall' | 'unassigned'
 
 export interface AlertConnection {
   nodes: Alert[]
@@ -86,12 +90,14 @@ export interface AlertRecentEventsOptions {
 
 export interface AlertSearchOptions {
   after?: null | string
+  assignedUserID?: null | string
   closedBefore?: null | ISOTimestamp
   createdBefore?: null | ISOTimestamp
   favoritesOnly?: null | boolean
   filterByServiceID?: null | string[]
   filterByStatus?: null | AlertStatus[]
   first?: null | number
+  includeAssigned?: null | boolean
   includeNotified?: null | boolean
   notClosedBefore?: null | ISOTimestamp
   notCreatedBefore?: null | ISOTimestamp
@@ -310,6 +316,7 @@ export interface CreateServiceInput {
   newEscalationPolicy?: null | CreateEscalationPolicyInput
   newHeartbeatMonitors?: null | CreateHeartbeatMonitorInput[]
   newIntegrationKeys?: null | CreateIntegrationKeyInput[]
+  notificationUrgency?: null | ServiceUrgency
 }
 
 export interface CreateUserCalendarSubscriptionInput {
@@ -1092,6 +1099,7 @@ export interface Service {
   maintenanceExpiresAt?: null | ISOTimestamp
   name: string
   notices: Notice[]
+  notificationUrgency: ServiceUrgency
   onCallUsers: ServiceOnCallUser[]
   recentEvents: AlertLogEntryConnection
 }
@@ -1122,6 +1130,8 @@ export interface ServiceSearchOptions {
   only?: null | string[]
   search?: null | string
 }
+
+export type ServiceUrgency = 'high' | 'low'
 
 export interface SetAlertNoiseReasonInput {
   alertID: number
@@ -1311,6 +1321,8 @@ export interface UpdateAlertsByServiceInput {
 
 export interface UpdateAlertsInput {
   alertIDs: number[]
+  assignedUserID?: null | string
+  clearAssignment?: null | boolean
   newStatus?: null | AlertStatus
   noiseReason?: null | string
 }
@@ -1385,6 +1397,7 @@ export interface UpdateServiceInput {
   id: string
   maintenanceExpiresAt?: null | ISOTimestamp
   name?: null | string
+  notificationUrgency?: null | ServiceUrgency
 }
 
 export interface UpdateUserCalendarSubscriptionInput {
@@ -1636,6 +1649,7 @@ type ConfigID =
   | 'General.DisableSMSLinks'
   | 'General.DisableLabelCreation'
   | 'General.DisableCalendarSubscriptions'
+  | 'General.EnableAlertAssignment'
   | 'Services.RequiredLabels'
   | 'Maintenance.AlertCleanupDays'
   | 'Maintenance.AlertAutoCloseDays'

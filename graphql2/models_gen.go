@@ -87,6 +87,14 @@ type AlertSearchOptions struct {
 	NotCreatedBefore  *time.Time       `json:"notCreatedBefore,omitempty"`
 	ClosedBefore      *time.Time       `json:"closedBefore,omitempty"`
 	NotClosedBefore   *time.Time       `json:"notClosedBefore,omitempty"`
+	// Restrict results to alerts assigned to this user, either explicitly or by
+	// them being on-call for the alert's current escalation step.
+	//
+	// Takes precedence over includeAssigned.
+	AssignedUserID *string `json:"assignedUserID,omitempty"`
+	// Additionally include alerts assigned to the current user, the same way
+	// includeNotified works. Ignored when assignedUserID is set.
+	IncludeAssigned *bool `json:"includeAssigned,omitempty"`
 }
 
 // AlertStats returns aggregated statistics about alerts.
@@ -276,6 +284,7 @@ type CreateServiceInput struct {
 	Description          *string                       `json:"description,omitempty"`
 	Favorite             *bool                         `json:"favorite,omitempty"`
 	EscalationPolicyID   *string                       `json:"escalationPolicyID,omitempty"`
+	NotificationUrgency  *service.Urgency              `json:"notificationUrgency,omitempty"`
 	NewEscalationPolicy  *CreateEscalationPolicyInput  `json:"newEscalationPolicy,omitempty"`
 	NewIntegrationKeys   []CreateIntegrationKeyInput   `json:"newIntegrationKeys,omitempty"`
 	Labels               []SetLabelInput               `json:"labels,omitempty"`
@@ -835,6 +844,12 @@ type UpdateAlertsInput struct {
 	AlertIDs    []int        `json:"alertIDs"`
 	NewStatus   *AlertStatus `json:"newStatus,omitempty"`
 	NoiseReason *string      `json:"noiseReason,omitempty"`
+	// Explicitly assign the alerts to this user, freezing the assignment so it no
+	// longer tracks the on-call user. Does not affect notification routing.
+	AssignedUserID *string `json:"assignedUserID,omitempty"`
+	// Clear any explicit assignment, returning the alerts to tracking the on-call
+	// user. Takes precedence over assignedUserID.
+	ClearAssignment *bool `json:"clearAssignment,omitempty"`
 }
 
 type UpdateBasicAuthInput struct {
@@ -912,11 +927,12 @@ type UpdateScheduleInput struct {
 }
 
 type UpdateServiceInput struct {
-	ID                   string     `json:"id"`
-	Name                 *string    `json:"name,omitempty"`
-	Description          *string    `json:"description,omitempty"`
-	EscalationPolicyID   *string    `json:"escalationPolicyID,omitempty"`
-	MaintenanceExpiresAt *time.Time `json:"maintenanceExpiresAt,omitempty"`
+	ID                   string           `json:"id"`
+	Name                 *string          `json:"name,omitempty"`
+	Description          *string          `json:"description,omitempty"`
+	EscalationPolicyID   *string          `json:"escalationPolicyID,omitempty"`
+	MaintenanceExpiresAt *time.Time       `json:"maintenanceExpiresAt,omitempty"`
+	NotificationUrgency  *service.Urgency `json:"notificationUrgency,omitempty"`
 }
 
 type UpdateUserCalendarSubscriptionInput struct {

@@ -8,6 +8,35 @@ function testServices(screen: ScreenFormat): void {
     window.localStorage.setItem('show_services_new_feature_popup', 'false')
   })
 
+  describe('Notification Urgency', () => {
+    let svc: Service
+    beforeEach(() =>
+      cy.createService().then((s: Service) => {
+        svc = s
+        return cy.visit(`/services/${svc.id}`)
+      }),
+    )
+
+    it('should set a service to low urgency and back to high', () => {
+      // services default to high urgency, so no notice is shown
+      cy.get('body').should('not.contain', 'Low Urgency')
+
+      cy.get('[data-cy="card-actions"]')
+        .find('button[aria-label="Edit"]')
+        .click()
+      cy.dialogTitle('Edit Service')
+      cy.dialogForm({ notificationUrgency: 'Low' })
+      cy.dialogFinish('Submit')
+
+      // the banner warns that nobody will be notified
+      cy.get('body').should('contain', 'Low Urgency')
+
+      // and it can be reverted straight from the banner
+      cy.get('button[aria-label="Set High Urgency"]').click()
+      cy.get('body').should('not.contain', 'Low Urgency')
+    })
+  })
+
   describe('Integration Keys', () => {
     let svc: Service
     beforeEach(() =>

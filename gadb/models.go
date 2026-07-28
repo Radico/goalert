@@ -807,6 +807,7 @@ func (ns NullRiverJobState) Value() (driver.Value, error) {
 }
 
 type Alert struct {
+	AssignedUserID  uuid.NullUUID
 	CreatedAt       time.Time
 	DedupKey        sql.NullString
 	Details         string
@@ -1260,6 +1261,7 @@ type Service struct {
 	ID                   uuid.UUID
 	MaintenanceExpiresAt sql.NullTime
 	Name                 string
+	NotificationUrgency  string
 }
 
 type SwitchoverLog struct {

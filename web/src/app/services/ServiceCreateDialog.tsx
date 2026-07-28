@@ -3,7 +3,7 @@ import { gql, useMutation, CombinedError } from 'urql'
 import FormDialog from '../dialogs/FormDialog'
 import ServiceForm, { Value } from './ServiceForm'
 import { Redirect } from 'wouter'
-import { Label } from '../../schema'
+import { Label, ServiceUrgency } from '../../schema'
 import { useErrorConsumer } from '../util/ErrorConsumer'
 import { useConfigValue } from '../util/RequireConfig'
 
@@ -11,6 +11,7 @@ interface InputVar {
   name: string
   description: string
   escalationPolicyID?: string
+  notificationUrgency: ServiceUrgency
   favorite: boolean
   labels: Label[]
   newEscalationPolicy?: {
@@ -33,13 +34,14 @@ const createMutation = gql`
 `
 
 function inputVars(
-  { name, description, escalationPolicyID, labels }: Value,
+  { name, description, escalationPolicyID, notificationUrgency, labels }: Value,
   attempt = 0,
 ): InputVar {
   const vars: InputVar = {
     name,
     description,
     escalationPolicyID,
+    notificationUrgency: notificationUrgency || 'high',
     favorite: true,
     labels,
   }
@@ -72,6 +74,7 @@ export default function ServiceCreateDialog(props: {
     name: '',
     description: '',
     escalationPolicyID: '',
+    notificationUrgency: 'high',
     labels: [],
   })
 

@@ -4,15 +4,30 @@ import TextField from '@mui/material/TextField'
 import { EscalationPolicySelect } from '../selection/EscalationPolicySelect'
 import { FormContainer, FormField } from '../forms'
 import { useConfigValue } from '../util/RequireConfig'
-import { Label } from '../../schema'
-import { InputAdornment } from '@mui/material'
+import { Label, ServiceUrgency } from '../../schema'
+import { InputAdornment, MenuItem } from '@mui/material'
 
 const MaxDetailsLength = 6 * 1024 // 6KiB
+
+const urgencyOptions: { value: ServiceUrgency; label: string; hint: string }[] =
+  [
+    {
+      value: 'high',
+      label: 'High',
+      hint: 'Alerts run the escalation policy and notify on-call users.',
+    },
+    {
+      value: 'low',
+      label: 'Low',
+      hint: 'Alerts are recorded for tracking only; nobody is notified.',
+    },
+  ]
 
 export interface Value {
   name: string
   description: string
   escalationPolicyID?: string
+  notificationUrgency?: ServiceUrgency
   labels: Label[]
 }
 
@@ -96,6 +111,26 @@ export default function ServiceForm(props: ServiceFormProps): JSX.Element {
             required={epRequired}
             component={EscalationPolicySelect}
           />
+        </Grid>
+        <Grid item xs={12}>
+          <FormField
+            fullWidth
+            component={TextField}
+            select
+            label='Urgency'
+            name='notificationUrgency'
+            hint={
+              urgencyOptions.find(
+                (o) => o.value === (props.value.notificationUrgency || 'high'),
+              )?.hint
+            }
+          >
+            {urgencyOptions.map((o) => (
+              <MenuItem value={o.value} key={o.value}>
+                {o.label}
+              </MenuItem>
+            ))}
+          </FormField>
         </Grid>
         {reqLabels &&
           reqLabels.map((labelName: string, idx: number) => (

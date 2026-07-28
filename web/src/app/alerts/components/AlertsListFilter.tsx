@@ -17,6 +17,8 @@ import FormControl from '@mui/material/FormControl'
 import classnames from 'classnames'
 import { useURLParam, useResetURLParams } from '../../actions'
 import { useIsWidthDown } from '../../util/useWidth'
+import { useConfigValue, useSessionInfo } from '../../util/RequireConfig'
+import { UserSelect } from '../../selection'
 
 const useStyles = makeStyles((theme: Theme) => ({
   filterActions: globalStyles(theme).filterActions,
@@ -56,7 +58,20 @@ function AlertsListFilter(props: AlertsListFilterProps): React.JSX.Element {
     'fullTime',
     false,
   )
-  const resetAll = useResetURLParams('filter', 'allServices', 'fullTime') // don't reset search param
+  const [assignedUserID, setAssignedUserID] = useURLParam<string>(
+    'assignedUserID',
+    '',
+  )
+  const [assignmentEnabled] = useConfigValue(
+    'General.EnableAlertAssignment',
+  ) as [boolean]
+  const { userID: currentUserID } = useSessionInfo()
+  const resetAll = useResetURLParams(
+    'filter',
+    'allServices',
+    'fullTime',
+    'assignedUserID',
+  ) // don't reset search param
   const isMobile = useIsWidthDown('md')
   const gridClasses = classnames(
     classes.grid,
@@ -138,6 +153,32 @@ function AlertsListFilter(props: AlertsListFilterProps): React.JSX.Element {
             )}
           </FormControl>
         </Grid>
+        {assignmentEnabled && (
+          <Grid item xs={12}>
+            <FormControl className={classes.formControl}>
+              <UserSelect
+                label='Assigned to'
+                name='assignedUserID'
+                data-cy='filter-assigned-user'
+                value={assignedUserID}
+                onChange={(id: string) => setAssignedUserID(id || '')}
+              />
+            </FormControl>
+            {/*
+              Alerts assigned to you are already included by default, so this
+              narrows the list to *only* yours. Selecting yourself from the
+              dropdown works too; this is just the common case.
+            */}
+            <Button
+              size='small'
+              data-cy='filter-assigned-to-me'
+              disabled={!currentUserID || assignedUserID === currentUserID}
+              onClick={() => setAssignedUserID(currentUserID)}
+            >
+              Only mine
+            </Button>
+          </Grid>
+        )}
         <Grid item xs={12} className={classes.filterActions}>
           <Button onClick={resetAll}>Reset</Button>
           <Button onClick={handleCloseFilters}>Done</Button>

@@ -103,6 +103,8 @@ type ComplexityRoot struct {
 
 	Alert struct {
 		AlertID              func(childComplexity int) int
+		AssignedUser         func(childComplexity int) int
+		AssignmentSource     func(childComplexity int) int
 		CreatedAt            func(childComplexity int) int
 		Details              func(childComplexity int) int
 		ID                   func(childComplexity int) int
@@ -724,6 +726,7 @@ type ComplexityRoot struct {
 		MaintenanceExpiresAt func(childComplexity int) int
 		Name                 func(childComplexity int) int
 		Notices              func(childComplexity int) int
+		NotificationUrgency  func(childComplexity int) int
 		OnCallUsers          func(childComplexity int) int
 		RecentEvents         func(childComplexity int, input *AlertRecentEventsOptions) int
 	}
@@ -903,6 +906,8 @@ type AlertResolver interface {
 	NoiseReason(ctx context.Context, obj *alert.Alert) (*string, error)
 	Meta(ctx context.Context, obj *alert.Alert) ([]AlertMetadata, error)
 	MetaValue(ctx context.Context, obj *alert.Alert, key string) (string, error)
+	AssignedUser(ctx context.Context, obj *alert.Alert) (*user.User, error)
+	AssignmentSource(ctx context.Context, obj *alert.Alert) (alert.AssignmentSource, error)
 }
 type AlertLogEntryResolver interface {
 	Message(ctx context.Context, obj *alertlog.Entry) (string, error)
@@ -1214,6 +1219,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Alert.AlertID(childComplexity), true
+	case "Alert.assignedUser":
+		if e.ComplexityRoot.Alert.AssignedUser == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Alert.AssignedUser(childComplexity), true
+	case "Alert.assignmentSource":
+		if e.ComplexityRoot.Alert.AssignmentSource == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Alert.AssignmentSource(childComplexity), true
 	case "Alert.createdAt":
 		if e.ComplexityRoot.Alert.CreatedAt == nil {
 			break
@@ -4325,6 +4342,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Service.Notices(childComplexity), true
+	case "Service.notificationUrgency":
+		if e.ComplexityRoot.Service.NotificationUrgency == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Service.NotificationUrgency(childComplexity), true
 	case "Service.onCallUsers":
 		if e.ComplexityRoot.Service.OnCallUsers == nil {
 			break
@@ -5151,6 +5174,10 @@ func (ec *executionContext) childFields_Alert(ctx context.Context, field graphql
 		return ec.fieldContext_Alert_meta(ctx, field)
 	case "metaValue":
 		return ec.fieldContext_Alert_metaValue(ctx, field)
+	case "assignedUser":
+		return ec.fieldContext_Alert_assignedUser(ctx, field)
+	case "assignmentSource":
+		return ec.fieldContext_Alert_assignmentSource(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Alert", field.Name)
 }
@@ -6107,6 +6134,8 @@ func (ec *executionContext) childFields_Service(ctx context.Context, field graph
 		return ec.fieldContext_Service_isFavorite(ctx, field)
 	case "maintenanceExpiresAt":
 		return ec.fieldContext_Service_maintenanceExpiresAt(ctx, field)
+	case "notificationUrgency":
+		return ec.fieldContext_Service_notificationUrgency(ctx, field)
 	case "onCallUsers":
 		return ec.fieldContext_Service_onCallUsers(ctx, field)
 	case "integrationKeys":
@@ -8712,6 +8741,61 @@ func (ec *executionContext) fieldContext_Alert_metaValue(ctx context.Context, fi
 		return fc, err
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _Alert_assignedUser(ctx context.Context, field graphql.CollectedField, obj *alert.Alert) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Alert_assignedUser(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Alert().AssignedUser(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *user.User) graphql.Marshaler {
+			return ec.marshalOUser2ᚖgithubᚗcomᚋtargetᚋgoalertᚋuserᚐUser(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Alert_assignedUser(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Alert",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_User(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Alert_assignmentSource(ctx context.Context, field graphql.CollectedField, obj *alert.Alert) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Alert_assignmentSource(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Alert().AssignmentSource(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v alert.AssignmentSource) graphql.Marshaler {
+			return ec.marshalNAlertAssignmentSource2githubᚗcomᚋtargetᚋgoalertᚋalertᚐAssignmentSource(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Alert_assignmentSource(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Alert", field, true, true, errors.New("field of type AlertAssignmentSource does not have child fields"))
 }
 
 func (ec *executionContext) _AlertConnection_nodes(ctx context.Context, field graphql.CollectedField, obj *AlertConnection) (ret graphql.Marshaler) {
@@ -20891,6 +20975,29 @@ func (ec *executionContext) fieldContext_Service_maintenanceExpiresAt(_ context.
 	return graphql.NewScalarFieldContext("Service", field, false, false, errors.New("field of type ISOTimestamp does not have child fields"))
 }
 
+func (ec *executionContext) _Service_notificationUrgency(ctx context.Context, field graphql.CollectedField, obj *service.Service) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Service_notificationUrgency(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NotificationUrgency, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v service.Urgency) graphql.Marshaler {
+			return ec.marshalNServiceUrgency2githubᚗcomᚋtargetᚋgoalertᚋserviceᚐUrgency(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Service_notificationUrgency(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Service", field, false, false, errors.New("field of type ServiceUrgency does not have child fields"))
+}
+
 func (ec *executionContext) _Service_onCallUsers(ctx context.Context, field graphql.CollectedField, obj *service.Service) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -24781,8 +24888,11 @@ func (ec *executionContext) unmarshalInputAlertSearchOptions(ctx context.Context
 	if _, present := asMap["sort"]; !present {
 		asMap["sort"] = "statusID"
 	}
+	if _, present := asMap["includeAssigned"]; !present {
+		asMap["includeAssigned"] = false
+	}
 
-	fieldsInOrder := [...]string{"filterByStatus", "filterByServiceID", "search", "first", "after", "favoritesOnly", "includeNotified", "omit", "sort", "createdBefore", "notCreatedBefore", "closedBefore", "notClosedBefore"}
+	fieldsInOrder := [...]string{"filterByStatus", "filterByServiceID", "search", "first", "after", "favoritesOnly", "includeNotified", "omit", "sort", "createdBefore", "notCreatedBefore", "closedBefore", "notClosedBefore", "assignedUserID", "includeAssigned"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -24880,6 +24990,20 @@ func (ec *executionContext) unmarshalInputAlertSearchOptions(ctx context.Context
 				return it, err
 			}
 			it.NotClosedBefore = data
+		case "assignedUserID":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("assignedUserID"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AssignedUserID = data
+		case "includeAssigned":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("includeAssigned"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.IncludeAssigned = data
 		}
 	}
 	return it, nil
@@ -25829,7 +25953,7 @@ func (ec *executionContext) unmarshalInputCreateServiceInput(ctx context.Context
 		asMap["description"] = ""
 	}
 
-	fieldsInOrder := [...]string{"name", "description", "favorite", "escalationPolicyID", "newEscalationPolicy", "newIntegrationKeys", "labels", "newHeartbeatMonitors"}
+	fieldsInOrder := [...]string{"name", "description", "favorite", "escalationPolicyID", "notificationUrgency", "newEscalationPolicy", "newIntegrationKeys", "labels", "newHeartbeatMonitors"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -25864,6 +25988,13 @@ func (ec *executionContext) unmarshalInputCreateServiceInput(ctx context.Context
 				return it, err
 			}
 			it.EscalationPolicyID = data
+		case "notificationUrgency":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("notificationUrgency"))
+			data, err := ec.unmarshalOServiceUrgency2ᚖgithubᚗcomᚋtargetᚋgoalertᚋserviceᚐUrgency(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NotificationUrgency = data
 		case "newEscalationPolicy":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("newEscalationPolicy"))
 			data, err := ec.unmarshalOCreateEscalationPolicyInput2ᚖgithubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐCreateEscalationPolicyInput(ctx, v)
@@ -28227,7 +28358,7 @@ func (ec *executionContext) unmarshalInputUpdateAlertsInput(ctx context.Context,
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"alertIDs", "newStatus", "noiseReason"}
+	fieldsInOrder := [...]string{"alertIDs", "newStatus", "noiseReason", "assignedUserID", "clearAssignment"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -28255,6 +28386,20 @@ func (ec *executionContext) unmarshalInputUpdateAlertsInput(ctx context.Context,
 				return it, err
 			}
 			it.NoiseReason = data
+		case "assignedUserID":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("assignedUserID"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AssignedUserID = data
+		case "clearAssignment":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clearAssignment"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClearAssignment = data
 		}
 	}
 	return it, nil
@@ -28737,7 +28882,7 @@ func (ec *executionContext) unmarshalInputUpdateServiceInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"id", "name", "description", "escalationPolicyID", "maintenanceExpiresAt"}
+	fieldsInOrder := [...]string{"id", "name", "description", "escalationPolicyID", "maintenanceExpiresAt", "notificationUrgency"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -28779,6 +28924,13 @@ func (ec *executionContext) unmarshalInputUpdateServiceInput(ctx context.Context
 				return it, err
 			}
 			it.MaintenanceExpiresAt = data
+		case "notificationUrgency":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("notificationUrgency"))
+			data, err := ec.unmarshalOServiceUrgency2ᚖgithubᚗcomᚋtargetᚋgoalertᚋserviceᚐUrgency(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NotificationUrgency = data
 		}
 	}
 	return it, nil
@@ -29724,6 +29876,78 @@ func (ec *executionContext) _Alert(ctx context.Context, sel ast.SelectionSet, ob
 					}
 				}()
 				res = ec._Alert_metaValue(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "assignedUser":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Alert_assignedUser(ctx, field, obj)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "assignmentSource":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Alert_assignmentSource(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -36562,6 +36786,11 @@ func (ec *executionContext) _Service(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "notificationUrgency":
+			out.Values[i] = ec._Service_notificationUrgency(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "onCallUsers":
 			field := field
 
@@ -39371,6 +39600,23 @@ func (ec *executionContext) marshalNAlert2ᚕgithubᚗcomᚋtargetᚋgoalertᚋa
 	return ret
 }
 
+func (ec *executionContext) unmarshalNAlertAssignmentSource2githubᚗcomᚋtargetᚋgoalertᚋalertᚐAssignmentSource(ctx context.Context, v any) (alert.AssignmentSource, error) {
+	tmp, err := graphql.UnmarshalString(v)
+	res := alert.AssignmentSource(tmp)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNAlertAssignmentSource2githubᚗcomᚋtargetᚋgoalertᚋalertᚐAssignmentSource(ctx context.Context, sel ast.SelectionSet, v alert.AssignmentSource) graphql.Marshaler {
+	_ = sel
+	res := graphql.MarshalString(string(v))
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+	}
+	return res
+}
+
 func (ec *executionContext) marshalNAlertConnection2githubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐAlertConnection(ctx context.Context, sel ast.SelectionSet, v AlertConnection) graphql.Marshaler {
 	return ec._AlertConnection(ctx, sel, &v)
 }
@@ -41091,6 +41337,23 @@ func (ec *executionContext) marshalNServiceOnCallUser2ᚕgithubᚗcomᚋtarget�
 	return ret
 }
 
+func (ec *executionContext) unmarshalNServiceUrgency2githubᚗcomᚋtargetᚋgoalertᚋserviceᚐUrgency(ctx context.Context, v any) (service.Urgency, error) {
+	tmp, err := graphql.UnmarshalString(v)
+	res := service.Urgency(tmp)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNServiceUrgency2githubᚗcomᚋtargetᚋgoalertᚋserviceᚐUrgency(ctx context.Context, sel ast.SelectionSet, v service.Urgency) graphql.Marshaler {
+	_ = sel
+	res := graphql.MarshalString(string(v))
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+	}
+	return res
+}
+
 func (ec *executionContext) unmarshalNSetAlertNoiseReasonInput2githubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐSetAlertNoiseReasonInput(ctx context.Context, v any) (SetAlertNoiseReasonInput, error) {
 	res, err := ec.unmarshalInputSetAlertNoiseReasonInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -42791,6 +43054,25 @@ func (ec *executionContext) unmarshalOServiceSearchOptions2ᚖgithubᚗcomᚋtar
 	}
 	res, err := ec.unmarshalInputServiceSearchOptions(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOServiceUrgency2ᚖgithubᚗcomᚋtargetᚋgoalertᚋserviceᚐUrgency(ctx context.Context, v any) (*service.Urgency, error) {
+	if v == nil {
+		return nil, nil
+	}
+	tmp, err := graphql.UnmarshalString(v)
+	res := service.Urgency(tmp)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOServiceUrgency2ᚖgithubᚗcomᚋtargetᚋgoalertᚋserviceᚐUrgency(ctx context.Context, sel ast.SelectionSet, v *service.Urgency) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	_ = sel
+	_ = ctx
+	res := graphql.MarshalString(string(*v))
+	return res
 }
 
 func (ec *executionContext) unmarshalOSetLabelInput2ᚕgithubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐSetLabelInputᚄ(ctx context.Context, v any) ([]SetLabelInput, error) {

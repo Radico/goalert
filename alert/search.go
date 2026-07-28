@@ -71,6 +71,20 @@ type SearchOptions struct {
 
 	// NotClosedBefore will omit any alerts closed any time before the provided time.
 	NotClosedBefore time.Time `json:"nc,omitempty"`
+
+	// AssignedUserID, if specified, will restrict alerts to those assigned to
+	// the given user -- either explicitly (claimed) or by virtue of them being
+	// on-call for the alert's current escalation step.
+	//
+	// Unlike NotifiedUserID this is restrictive rather than additive.
+	AssignedUserID string `json:"au,omitempty"`
+
+	// IncludeAssignedUserID will add all alerts assigned to the specified user
+	// to the results, the same way NotifiedUserID does.
+	//
+	// This is the additive counterpart to AssignedUserID; the two are mutually
+	// exclusive and Normalize clears this one when both are set.
+	IncludeAssignedUserID string `json:"ia,omitempty"`
 }
 
 type IDFilter struct {
@@ -91,6 +105,37 @@ var serviceSearchTemplate = template.Must(template.New("alert-search-services").
 `))
 
 var searchTemplate = template.Must(template.New("alert-search").Funcs(search.Helpers()).Parse(`
+	{{/*
+		Matches alerts owned by :assignedUserID -- either claimed by them, or
+		unclaimed and derived from them being on-call for the alert's current
+		escalation step.
+
+		Defined once because it is used in both the restrictive and the additive
+		mode, and because it must use the same selection rule as
+		Alert_GetManyOnCallAssignees so that the alerts listed are exactly the
+		ones that display as assigned to that user.
+	*/}}
+	{{ define "assignedToUser" }}
+		(
+			a.assigned_user_id = :assignedUserID::uuid
+			OR (
+				a.assigned_user_id isnull
+				AND :assignedUserID::uuid = (
+					select ocu.user_id
+					from escalation_policy_state st
+					join escalation_policy_steps step on
+						step.escalation_policy_id = st.escalation_policy_id and
+						step.step_number = st.escalation_policy_step_number
+					join ep_step_on_call_users ocu on
+						ocu.ep_step_id = step.id and
+						ocu.end_time isnull
+					where st.alert_id = a.id
+					order by ocu.start_time
+					limit 1
+				)
+			)
+		)
+	{{ end }}
 	SELECT
 		a.id,
 		a.summary,
@@ -118,6 +163,9 @@ var searchTemplate = template.Must(template.New("alert-search").Funcs(search.Hel
 			{{ if .NotifiedUserID }}
 				OR a.id = any(select alert_id from alert_logs where event in ('notification_sent', 'no_notification_sent') and sub_user_id = :notifiedUserID)
 			{{ end }}
+			{{ if .IncludeAssignedUserID }}
+				OR {{ template "assignedToUser" . }}
+			{{ end }}
 		)
 	{{ end }}
 	{{ if not .Before.IsZero }}
@@ -140,8 +188,11 @@ var searchTemplate = template.Must(template.New("alert-search").Funcs(search.Hel
 			{{ end }}
 		)
 	{{ end }}
+	{{ if .AssignedUserID }}
+		AND {{ template "assignedToUser" . }}
+	{{ end }}
 	{{ if not .ClosedBefore.IsZero }}
-		AND EXISTS (select 1 from alert_metrics where alert_id = a.id AND closed_at < :closedBeforeTime) 
+		AND EXISTS (select 1 from alert_metrics where alert_id = a.id AND closed_at < :closedBeforeTime)
 	{{ end }}
 	{{ if not .NotClosedBefore.IsZero }}
 		AND EXISTS (select 1 from alert_metrics where alert_id = a.id AND closed_at > :notClosedBeforeTime) 
@@ -180,6 +231,17 @@ func (opts renderData) Normalize() (*renderData, error) {
 	if opts.After.Status != "" {
 		err = validate.Many(err, validate.OneOf("After.Status", opts.After.Status, StatusTriggered, StatusActive, StatusClosed))
 	}
+	// An explicit assignee filter is restrictive, so it supersedes the additive
+	// "also show me mine" default rather than widening it back out.
+	if opts.AssignedUserID != "" {
+		opts.IncludeAssignedUserID = ""
+	}
+	if opts.AssignedUserID != "" {
+		err = validate.Many(err, validate.UUID("AssignedUserID", opts.AssignedUserID))
+	}
+	if opts.IncludeAssignedUserID != "" {
+		err = validate.Many(err, validate.UUID("IncludeAssignedUserID", opts.IncludeAssignedUserID))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -192,6 +254,17 @@ func (opts renderData) Normalize() (*renderData, error) {
 	}
 
 	return &opts, err
+}
+
+// assignedUser returns the user ID bound to :assignedUserID.
+//
+// The restrictive and additive filters share the parameter because Normalize
+// makes them mutually exclusive.
+func (opts renderData) assignedUser() string {
+	if opts.AssignedUserID != "" {
+		return opts.AssignedUserID
+	}
+	return opts.IncludeAssignedUserID
 }
 
 func (opts renderData) QueryArgs() []sql.NamedArg {
@@ -217,6 +290,7 @@ func (opts renderData) QueryArgs() []sql.NamedArg {
 		sql.Named("afterCreated", opts.After.Created),
 		sql.Named("omit", sqlutil.IntArray(opts.Omit)),
 		sql.Named("notifiedUserID", opts.NotifiedUserID),
+		sql.Named("assignedUserID", opts.assignedUser()),
 		sql.Named("beforeTime", opts.Before),
 		sql.Named("notBeforeTime", opts.NotBefore),
 		sql.Named("closedBeforeTime", opts.ClosedBefore),

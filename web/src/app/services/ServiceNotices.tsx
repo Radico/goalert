@@ -9,6 +9,7 @@ const query = gql`
   query serviceMaintenanceQuery($serviceID: ID!) {
     service(id: $serviceID) {
       maintenanceExpiresAt
+      notificationUrgency
 
       notices {
         type
@@ -46,6 +47,37 @@ export default function ServiceNotices({
     return null
   }
   let notices = [...(data?.service?.notices ?? []), ...extraNotices]
+
+  if (data?.service?.notificationUrgency === 'low') {
+    notices = [
+      {
+        type: 'WARNING',
+        message: 'Low Urgency',
+        details:
+          'Alerts for this service are recorded for tracking, but nobody is notified.',
+        action: (
+          <Button
+            aria-label='Set High Urgency'
+            onClick={() => {
+              updateService(
+                {
+                  input: {
+                    id: serviceID,
+                    notificationUrgency: 'high',
+                  },
+                },
+                { additionalTypenames: ['Service'] },
+              )
+            }}
+          >
+            Set High Urgency
+          </Button>
+        ),
+      },
+      ...notices,
+    ]
+  }
+
   const maintMode = data?.service?.maintenanceExpiresAt
   if (maintMode) {
     notices = [
