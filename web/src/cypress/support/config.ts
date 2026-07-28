@@ -20,6 +20,7 @@ interface General {
   NotificationDisclaimer: string
   DisableCalendarSubscriptions: boolean
   EnableV1GraphQL: boolean
+  EnableAlertAssignment: boolean
 }
 
 interface Auth {

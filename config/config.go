@@ -32,6 +32,7 @@ type Config struct {
 		DisableSMSLinks              bool   `public:"true" info:"If set, SMS messages will not contain a URL pointing to GoAlert."`
 		DisableLabelCreation         bool   `public:"true" info:"Disables the ability to create new labels for services."`
 		DisableCalendarSubscriptions bool   `public:"true" info:"If set, disables all active calendar subscriptions as well as the ability to create new calendar subscriptions."`
+		EnableAlertAssignment        bool   `public:"true" info:"If set, alerts track an assigned user: unclaimed alerts show the current on-call user, acknowledging claims ownership, and alerts can be re-assigned. Does not affect notification routing."`
 	}
 
 	Services struct {

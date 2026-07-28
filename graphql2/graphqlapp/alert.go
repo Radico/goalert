@@ -15,12 +15,14 @@ import (
 	"github.com/target/goalert/alert/alertlog"
 	"github.com/target/goalert/alert/alertmetrics"
 	"github.com/target/goalert/assignment"
+	"github.com/target/goalert/config"
 	"github.com/target/goalert/gadb"
 	"github.com/target/goalert/graphql2"
 	"github.com/target/goalert/notification"
 	"github.com/target/goalert/permission"
 	"github.com/target/goalert/search"
 	"github.com/target/goalert/service"
+	"github.com/target/goalert/user"
 	"github.com/target/goalert/util/log"
 	"github.com/target/goalert/util/timeutil"
 	"github.com/target/goalert/validation"
@@ -249,6 +251,9 @@ func (q *Query) Alerts(ctx context.Context, opts *graphql2.AlertSearchOptions) (
 	if opts.IncludeNotified != nil && *opts.IncludeNotified {
 		s.NotifiedUserID = permission.UserID(ctx)
 	}
+	if opts.AssignedUserID != nil && config.FromContext(ctx).General.EnableAlertAssignment {
+		s.AssignedUserID = *opts.AssignedUserID
+	}
 
 	err = validate.Many(
 		validate.Range("ServiceIDs", len(opts.FilterByServiceID), 0, 50),
@@ -467,6 +472,43 @@ func (a *Alert) NoiseReason(ctx context.Context, raw *alert.Alert) (*string, err
 	return &am.NoiseReason, nil
 }
 
+// alertAssignment resolves an alert's ownership, returning an unassigned
+// result when the feature is disabled so that callers never see a stale
+// assignee written before the feature was turned off.
+func (a *Alert) alertAssignment(ctx context.Context, raw *alert.Alert) (*alert.Assignment, error) {
+	if !config.FromContext(ctx).General.EnableAlertAssignment {
+		return &alert.Assignment{AlertID: raw.ID, Source: alert.AssignmentSourceUnassigned}, nil
+	}
+
+	as, err := (*App)(a).FindOneAlertAssignment(ctx, raw.ID)
+	if err != nil {
+		return nil, err
+	}
+	if as == nil {
+		return &alert.Assignment{AlertID: raw.ID, Source: alert.AssignmentSourceUnassigned}, nil
+	}
+	return as, nil
+}
+
+func (a *Alert) AssignedUser(ctx context.Context, raw *alert.Alert) (*user.User, error) {
+	as, err := a.alertAssignment(ctx, raw)
+	if err != nil {
+		return nil, err
+	}
+	if as.UserID == "" {
+		return nil, nil
+	}
+	return (*App)(a).FindOneUser(ctx, as.UserID)
+}
+
+func (a *Alert) AssignmentSource(ctx context.Context, raw *alert.Alert) (alert.AssignmentSource, error) {
+	as, err := a.alertAssignment(ctx, raw)
+	if err != nil {
+		return alert.AssignmentSourceUnassigned, err
+	}
+	return as.Source, nil
+}
+
 func (m *Mutation) SetAlertNoiseReason(ctx context.Context, input graphql2.SetAlertNoiseReasonInput) (bool, error) {
 	err := m.AlertStore.UpdateFeedback(ctx, &alert.Feedback{
 		ID:          input.AlertID,
@@ -604,6 +646,14 @@ func (m *Mutation) UpdateAlerts(ctx context.Context, args graphql2.UpdateAlertsI
 		return nil, validation.NewGenericError("cannot set both 'newStatus' and 'noiseReason'")
 	}
 
+	assigning := args.AssignedUserID != nil || (args.ClearAssignment != nil && *args.ClearAssignment)
+	if assigning && (args.NewStatus != nil || args.NoiseReason != nil) {
+		return nil, validation.NewGenericError("cannot change assignment and status or noise reason in the same request")
+	}
+	if assigning && !config.FromContext(ctx).General.EnableAlertAssignment {
+		return nil, validation.NewGenericError("alert assignment is not enabled")
+	}
+
 	var updatedIDs []int
 	if args.NewStatus != nil {
 		err := validate.OneOf("Status", *args.NewStatus, graphql2.AlertStatusStatusAcknowledged, graphql2.AlertStatusStatusClosed)
@@ -628,6 +678,21 @@ func (m *Mutation) UpdateAlerts(ctx context.Context, args graphql2.UpdateAlertsI
 	if args.NoiseReason != nil {
 		var err error
 		updatedIDs, err = m.AlertStore.UpdateManyAlertFeedback(ctx, *args.NoiseReason, args.AlertIDs)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if assigning {
+		// clearAssignment takes precedence, returning the alerts to tracking
+		// whoever is on-call.
+		var assignee *string
+		if args.ClearAssignment == nil || !*args.ClearAssignment {
+			assignee = args.AssignedUserID
+		}
+
+		var err error
+		updatedIDs, err = m.AlertStore.SetAssignee(ctx, args.AlertIDs, assignee)
 		if err != nil {
 			return nil, err
 		}

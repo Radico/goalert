@@ -17,6 +17,7 @@ import FormControl from '@mui/material/FormControl'
 import classnames from 'classnames'
 import { useURLParam, useResetURLParams } from '../../actions'
 import { useIsWidthDown } from '../../util/useWidth'
+import { useConfigValue } from '../../util/RequireConfig'
 
 const useStyles = makeStyles((theme: Theme) => ({
   filterActions: globalStyles(theme).filterActions,
@@ -56,7 +57,19 @@ function AlertsListFilter(props: AlertsListFilterProps): React.JSX.Element {
     'fullTime',
     false,
   )
-  const resetAll = useResetURLParams('filter', 'allServices', 'fullTime') // don't reset search param
+  const [assignedToMe, setAssignedToMe] = useURLParam<boolean>(
+    'assignedToMe',
+    false,
+  )
+  const [assignmentEnabled] = useConfigValue(
+    'General.EnableAlertAssignment',
+  ) as [boolean]
+  const resetAll = useResetURLParams(
+    'filter',
+    'allServices',
+    'fullTime',
+    'assignedToMe',
+  ) // don't reset search param
   const isMobile = useIsWidthDown('md')
   const gridClasses = classnames(
     classes.grid,
@@ -95,6 +108,19 @@ function AlertsListFilter(props: AlertsListFilterProps): React.JSX.Element {
         <Grid item xs={12} className={classes.gridItem}>
           <FormControl>
             {favoritesFilter}
+            {assignmentEnabled && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    aria-label='Assigned to me toggle'
+                    data-cy='toggle-assigned-to-me'
+                    checked={assignedToMe}
+                    onChange={() => setAssignedToMe(!assignedToMe)}
+                  />
+                }
+                label='Assigned to me'
+              />
+            )}
             <FormControlLabel
               control={
                 <Switch

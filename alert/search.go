@@ -71,6 +71,13 @@ type SearchOptions struct {
 
 	// NotClosedBefore will omit any alerts closed any time before the provided time.
 	NotClosedBefore time.Time `json:"nc,omitempty"`
+
+	// AssignedUserID, if specified, will restrict alerts to those assigned to
+	// the given user -- either explicitly (claimed) or by virtue of them being
+	// on-call for the alert's current escalation step.
+	//
+	// Unlike NotifiedUserID this is restrictive rather than additive.
+	AssignedUserID string `json:"au,omitempty"`
 }
 
 type IDFilter struct {
@@ -140,8 +147,33 @@ var searchTemplate = template.Must(template.New("alert-search").Funcs(search.Hel
 			{{ end }}
 		)
 	{{ end }}
+	{{ if .AssignedUserID }}
+		AND (
+			a.assigned_user_id = :assignedUserID::uuid
+			OR (
+				a.assigned_user_id isnull
+				AND :assignedUserID::uuid = (
+					-- Must use the same selection rule as
+					-- Alert_GetManyOnCallAssignees, so that the alerts listed
+					-- here are exactly the ones that display as assigned to
+					-- this user.
+					select ocu.user_id
+					from escalation_policy_state st
+					join escalation_policy_steps step on
+						step.escalation_policy_id = st.escalation_policy_id and
+						step.step_number = st.escalation_policy_step_number
+					join ep_step_on_call_users ocu on
+						ocu.ep_step_id = step.id and
+						ocu.end_time isnull
+					where st.alert_id = a.id
+					order by ocu.start_time
+					limit 1
+				)
+			)
+		)
+	{{ end }}
 	{{ if not .ClosedBefore.IsZero }}
-		AND EXISTS (select 1 from alert_metrics where alert_id = a.id AND closed_at < :closedBeforeTime) 
+		AND EXISTS (select 1 from alert_metrics where alert_id = a.id AND closed_at < :closedBeforeTime)
 	{{ end }}
 	{{ if not .NotClosedBefore.IsZero }}
 		AND EXISTS (select 1 from alert_metrics where alert_id = a.id AND closed_at > :notClosedBeforeTime) 
@@ -180,6 +212,9 @@ func (opts renderData) Normalize() (*renderData, error) {
 	if opts.After.Status != "" {
 		err = validate.Many(err, validate.OneOf("After.Status", opts.After.Status, StatusTriggered, StatusActive, StatusClosed))
 	}
+	if opts.AssignedUserID != "" {
+		err = validate.Many(err, validate.UUID("AssignedUserID", opts.AssignedUserID))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -217,6 +252,7 @@ func (opts renderData) QueryArgs() []sql.NamedArg {
 		sql.Named("afterCreated", opts.After.Created),
 		sql.Named("omit", sqlutil.IntArray(opts.Omit)),
 		sql.Named("notifiedUserID", opts.NotifiedUserID),
+		sql.Named("assignedUserID", opts.AssignedUserID),
 		sql.Named("beforeTime", opts.Before),
 		sql.Named("notBeforeTime", opts.NotBefore),
 		sql.Named("closedBeforeTime", opts.ClosedBefore),

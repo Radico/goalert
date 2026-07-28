@@ -519,6 +519,50 @@ func (q *Queries) Alert_AlertHasEPState(ctx context.Context, alertID int64) (boo
 	return has_ep_state, err
 }
 
+const alert_ClaimManyAlertsOnAck = `-- name: Alert_ClaimManyAlertsOnAck :many
+UPDATE
+    alerts
+SET
+    assigned_user_id = $1
+WHERE
+    id = ANY ($2::bigint[])
+    AND assigned_user_id ISNULL
+RETURNING
+    id
+`
+
+type Alert_ClaimManyAlertsOnAckParams struct {
+	AssignedUserID uuid.NullUUID
+	AlertIds       []int64
+}
+
+// Claims ownership of alerts for the acknowledging user.
+//
+// Only unclaimed alerts are affected, so re-acknowledging an alert can never
+// take it away from whoever already owns it.
+func (q *Queries) Alert_ClaimManyAlertsOnAck(ctx context.Context, arg Alert_ClaimManyAlertsOnAckParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, alert_ClaimManyAlertsOnAck, arg.AssignedUserID, pq.Array(arg.AlertIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const alert_GetAlertFeedback = `-- name: Alert_GetAlertFeedback :many
 SELECT
     alert_id,
@@ -630,6 +674,111 @@ func (q *Queries) Alert_GetEscalationPolicyID(ctx context.Context, id int64) (uu
 	var escalation_policy_id uuid.UUID
 	err := row.Scan(&escalation_policy_id)
 	return escalation_policy_id, err
+}
+
+const alert_GetManyExplicitAssignees = `-- name: Alert_GetManyExplicitAssignees :many
+SELECT
+    id AS alert_id,
+    assigned_user_id
+FROM
+    alerts
+WHERE
+    id = ANY ($1::bigint[])
+    AND assigned_user_id NOTNULL
+`
+
+type Alert_GetManyExplicitAssigneesRow struct {
+	AlertID        int64
+	AssignedUserID uuid.NullUUID
+}
+
+// Returns the explicitly-assigned (claimed) user for many alerts.
+//
+// An alert with assigned_user_id set has been claimed -- either by
+// acknowledging it or by an explicit re-assignment -- and is frozen: it no
+// longer follows escalations or rotation handoffs.
+func (q *Queries) Alert_GetManyExplicitAssignees(ctx context.Context, alertIds []int64) ([]Alert_GetManyExplicitAssigneesRow, error) {
+	rows, err := q.db.QueryContext(ctx, alert_GetManyExplicitAssignees, pq.Array(alertIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Alert_GetManyExplicitAssigneesRow
+	for rows.Next() {
+		var i Alert_GetManyExplicitAssigneesRow
+		if err := rows.Scan(&i.AlertID, &i.AssignedUserID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const alert_GetManyOnCallAssignees = `-- name: Alert_GetManyOnCallAssignees :many
+SELECT DISTINCT ON (st.alert_id)
+    st.alert_id,
+    ocu.user_id
+FROM
+    escalation_policy_state st
+    JOIN alerts a ON a.id = st.alert_id
+        AND a.assigned_user_id ISNULL
+    JOIN escalation_policy_steps step ON step.escalation_policy_id = st.escalation_policy_id
+        AND step.step_number = st.escalation_policy_step_number
+    JOIN ep_step_on_call_users ocu ON ocu.ep_step_id = step.id
+        AND ocu.end_time ISNULL
+WHERE
+    st.alert_id = ANY ($1::bigint[])
+ORDER BY
+    st.alert_id,
+    ocu.start_time
+`
+
+type Alert_GetManyOnCallAssigneesRow struct {
+	AlertID int64
+	UserID  uuid.UUID
+}
+
+// Returns the derived assignee for many unclaimed alerts.
+//
+// Unclaimed alerts (assigned_user_id ISNULL) resolve to whoever is currently
+// on-call for the alert's current escalation step, so ownership follows
+// escalations and rotation handoffs without any writes.
+//
+// Joining on escalation_policy_step_number (NOT NULL, default 0) rather than
+// escalation_policy_step_id (NULL until the first escalation) means a brand new
+// alert correctly resolves to step 0's on-call user.
+//
+// A step can resolve to several users (overlapping schedule rules, or an
+// override that adds without removing); DISTINCT ON takes the longest-serving.
+// Alerts whose step resolves to nobody -- for example a step targeting only a
+// notification channel -- return no row at all, and are therefore unassigned.
+func (q *Queries) Alert_GetManyOnCallAssignees(ctx context.Context, alertIds []int64) ([]Alert_GetManyOnCallAssigneesRow, error) {
+	rows, err := q.db.QueryContext(ctx, alert_GetManyOnCallAssignees, pq.Array(alertIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Alert_GetManyOnCallAssigneesRow
+	for rows.Next() {
+		var i Alert_GetManyOnCallAssigneesRow
+		if err := rows.Scan(&i.AlertID, &i.UserID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const alert_GetStatusAndLockService = `-- name: Alert_GetStatusAndLockService :one
@@ -810,6 +959,48 @@ func (q *Queries) Alert_SetAlertMetadata(ctx context.Context, arg Alert_SetAlert
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const alert_SetManyAlertAssignees = `-- name: Alert_SetManyAlertAssignees :many
+UPDATE
+    alerts
+SET
+    assigned_user_id = $1
+WHERE
+    id = ANY ($2::bigint[])
+    AND status != 'closed'
+    AND assigned_user_id IS DISTINCT FROM $1
+RETURNING
+    id
+`
+
+type Alert_SetManyAlertAssigneesParams struct {
+	AssignedUserID uuid.NullUUID
+	AlertIds       []int64
+}
+
+// Explicitly assigns many alerts to a user (or clears the assignment when NULL).
+func (q *Queries) Alert_SetManyAlertAssignees(ctx context.Context, arg Alert_SetManyAlertAssigneesParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, alert_SetManyAlertAssignees, arg.AssignedUserID, pq.Array(arg.AlertIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const alert_SetManyAlertFeedback = `-- name: Alert_SetManyAlertFeedback :many

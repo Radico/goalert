@@ -79,8 +79,25 @@ export default function AlertDetails(
   props: AlertDetailsProps,
 ): React.JSX.Element {
   const [analyticsID] = useConfigValue('General.GoogleAnalyticsID') as [string]
+  const [assignmentEnabled] = useConfigValue(
+    'General.EnableAlertAssignment',
+  ) as [boolean]
   const classes = useStyles()
   const isMobile = useIsWidthDown('sm')
+
+  /*
+   * Distinguishes an alert nobody has picked up yet -- where the assignee is
+   * simply whoever is on-call, and will move as the alert escalates -- from one
+   * a person has actually claimed.
+   */
+  const renderAssignee = (): string => {
+    const assignee = props.data.assignedUser
+    if (!assignee) return 'Unassigned'
+    if (props.data.assignmentSource === 'explicit') {
+      return `Assigned to ${assignee.name}`
+    }
+    return `On-call: ${assignee.name} (unclaimed)`
+  }
 
   const alertAction = (action: string, mutation: () => void): void => {
     if (analyticsID) ReactGA.event({ category: 'Alert Action', action })
@@ -399,6 +416,17 @@ export default function AlertDetails(
                   {alert.status.toUpperCase().replace('STATUS', '')}
                 </Typography>
               </Grid>
+              {assignmentEnabled && (
+                <Grid item xs={12}>
+                  <Typography
+                    variant='body1'
+                    color='textSecondary'
+                    data-cy='alert-assignee'
+                  >
+                    {renderAssignee()}
+                  </Typography>
+                </Grid>
+              )}
             </Grid>
           </CardContent>
           <CardActions primaryActions={getMenuOptions()} />

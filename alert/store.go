@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/target/goalert/alert/alertlog"
+	"github.com/target/goalert/config"
 	"github.com/target/goalert/gadb"
 	"github.com/target/goalert/permission"
 	"github.com/target/goalert/util"
@@ -227,6 +228,206 @@ func (s *Store) canTouchAlert(ctx context.Context, alertID int) error {
 	}
 
 	return permission.LimitCheckAny(ctx, checks...)
+}
+
+// Assignments returns the resolved ownership of the given alerts.
+//
+// Alerts that have been claimed resolve to their stored assignee; unclaimed
+// alerts resolve to whoever is currently on-call for their escalation step.
+// Every requested alert ID gets exactly one Assignment, so alerts that are
+// neither claimed nor covered by an on-call user come back as unassigned.
+func (s *Store) Assignments(ctx context.Context, alertIDs []int) ([]Assignment, error) {
+	err := permission.LimitCheckAny(ctx, permission.System, permission.User)
+	if err != nil {
+		return nil, err
+	}
+
+	err = validate.Range("AlertIDs", len(alertIDs), 0, maxBatch)
+	if err != nil {
+		return nil, err
+	}
+	if len(alertIDs) == 0 {
+		return nil, nil
+	}
+
+	ids := make([]int64, len(alertIDs))
+	for i, id := range alertIDs {
+		ids[i] = int64(id)
+	}
+
+	db := gadb.New(s.db)
+
+	explicit, err := db.Alert_GetManyExplicitAssignees(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("get explicit assignees: %w", err)
+	}
+	onCall, err := db.Alert_GetManyOnCallAssignees(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("get on-call assignees: %w", err)
+	}
+
+	byID := make(map[int]Assignment, len(alertIDs))
+	for _, id := range alertIDs {
+		byID[id] = Assignment{AlertID: id, Source: AssignmentSourceUnassigned}
+	}
+	for _, row := range onCall {
+		byID[int(row.AlertID)] = Assignment{
+			AlertID: int(row.AlertID),
+			UserID:  row.UserID.String(),
+			Source:  AssignmentSourceOnCall,
+		}
+	}
+	// Explicit assignments win: the two queries are mutually exclusive by
+	// construction, but applying them in this order keeps that a property of
+	// the code rather than only of the SQL.
+	for _, row := range explicit {
+		byID[int(row.AlertID)] = Assignment{
+			AlertID: int(row.AlertID),
+			UserID:  row.AssignedUserID.UUID.String(),
+			Source:  AssignmentSourceExplicit,
+		}
+	}
+
+	result := make([]Assignment, 0, len(byID))
+	for _, id := range alertIDs {
+		result = append(result, byID[id])
+	}
+
+	return result, nil
+}
+
+// SetAssignee explicitly assigns the given alerts to a user, or clears the
+// assignment when userID is nil.
+//
+// Assigning an alert is triage metadata only -- it never changes which users
+// are notified, which remains determined by the service's escalation policy.
+// Returns the IDs of alerts whose assignment actually changed.
+func (s *Store) SetAssignee(ctx context.Context, alertIDs []int, userID *string) ([]int, error) {
+	err := permission.LimitCheckAny(ctx, permission.System, permission.User)
+	if err != nil {
+		return nil, err
+	}
+
+	err = validate.Range("AlertIDs", len(alertIDs), 1, maxBatch)
+	if err != nil {
+		return nil, err
+	}
+
+	var assignee uuid.NullUUID
+	if userID != nil {
+		err = validate.UUID("UserID", *userID)
+		if err != nil {
+			return nil, err
+		}
+		id, err := uuid.Parse(*userID)
+		if err != nil {
+			return nil, err
+		}
+		assignee = uuid.NullUUID{UUID: id, Valid: true}
+	}
+
+	for _, id := range alertIDs {
+		err = s.canTouchAlert(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	ids := make([]int64, len(alertIDs))
+	for i, id := range alertIDs {
+		ids[i] = int64(id)
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer sqlutil.Rollback(ctx, "alert: set assignee", tx)
+
+	updated, err := gadb.New(tx).Alert_SetManyAlertAssignees(ctx, gadb.Alert_SetManyAlertAssigneesParams{
+		AlertIds:       ids,
+		AssignedUserID: assignee,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("set assignees: %w", err)
+	}
+
+	updatedIDs := make([]int, len(updated))
+	for i, id := range updated {
+		updatedIDs[i] = int(id)
+	}
+
+	if len(updatedIDs) > 0 {
+		err = s.logDB.LogManyTx(ctx, tx, updatedIDs, alertlog.TypeAssignmentChanged, nil)
+		if err != nil {
+			return nil, fmt.Errorf("log assignment change: %w", err)
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, err
+	}
+
+	return updatedIDs, nil
+}
+
+// claimOnAckTx assigns the acknowledging user to any of the given alerts that
+// are still unclaimed.
+//
+// Acknowledging is how a user takes ownership of an alert: before that the
+// assignee tracks the on-call user, and afterwards it is frozen. Only unclaimed
+// alerts are touched, so re-acknowledging can never take an alert away from
+// whoever already owns it.
+//
+// This is a no-op when the feature is disabled, or when there is no user in
+// context (for example a System-driven acknowledgement), which leaves the alert
+// unclaimed and therefore still tracking on-call.
+func (s *Store) claimOnAckTx(ctx context.Context, tx *sql.Tx, alertIDs []int) error {
+	if len(alertIDs) == 0 {
+		return nil
+	}
+	if !config.FromContext(ctx).General.EnableAlertAssignment {
+		return nil
+	}
+
+	userID := permission.UserID(ctx)
+	if userID == "" {
+		return nil
+	}
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		// Not a user-shaped subject (e.g. an integration key); nothing to claim.
+		return nil
+	}
+
+	ids := make([]int64, len(alertIDs))
+	for i, aID := range alertIDs {
+		ids[i] = int64(aID)
+	}
+
+	claimed, err := gadb.New(tx).Alert_ClaimManyAlertsOnAck(ctx, gadb.Alert_ClaimManyAlertsOnAckParams{
+		AlertIds:       ids,
+		AssignedUserID: uuid.NullUUID{UUID: id, Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("claim alerts on ack: %w", err)
+	}
+	if len(claimed) == 0 {
+		return nil
+	}
+
+	claimedIDs := make([]int, len(claimed))
+	for i, aID := range claimed {
+		claimedIDs[i] = int(aID)
+	}
+
+	err = s.logDB.LogManyTx(ctx, tx, claimedIDs, alertlog.TypeAssignmentChanged, nil)
+	if err != nil {
+		return fmt.Errorf("log assignment change: %w", err)
+	}
+
+	return nil
 }
 
 // EscalateAsOf will request escalation for the given alert ID as-of the given time.
@@ -453,6 +654,15 @@ func (s *Store) UpdateManyAlertStatus(ctx context.Context, status Status, alertI
 	err = s.logDB.LogManyTx(ctx, tx, updatedIDs, t, logMeta)
 	if err != nil {
 		return nil, err
+	}
+
+	// Acknowledging claims ownership. Only alerts that actually transitioned are
+	// considered, so a redundant ack cannot take an alert from its owner.
+	if status == StatusActive {
+		err = s.claimOnAckTx(ctx, tx, updatedIDs)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	err = tx.Commit()
@@ -682,6 +892,13 @@ func (s *Store) UpdateStatusTx(ctx context.Context, tx *sql.Tx, id int, stat Sta
 		s.logDB.MustLogTx(ctx, tx, id, alertlog.TypeClosed, nil)
 	} else if stat == StatusActive {
 		s.logDB.MustLogTx(ctx, tx, id, alertlog.TypeAcknowledged, nil)
+
+		// Acknowledging claims ownership; the checks above guarantee this is a
+		// real triggered -> active transition.
+		err = s.claimOnAckTx(ctx, tx, []int{id})
+		if err != nil {
+			return err
+		}
 	} else if stat != StatusTriggered {
 		log.Log(ctx, errors.Errorf("unknown/unhandled alert status update: %s", stat))
 	}

@@ -87,6 +87,9 @@ type AlertSearchOptions struct {
 	NotCreatedBefore  *time.Time       `json:"notCreatedBefore,omitempty"`
 	ClosedBefore      *time.Time       `json:"closedBefore,omitempty"`
 	NotClosedBefore   *time.Time       `json:"notClosedBefore,omitempty"`
+	// Restrict results to alerts assigned to this user, either explicitly or by
+	// them being on-call for the alert's current escalation step.
+	AssignedUserID *string `json:"assignedUserID,omitempty"`
 }
 
 // AlertStats returns aggregated statistics about alerts.
@@ -836,6 +839,12 @@ type UpdateAlertsInput struct {
 	AlertIDs    []int        `json:"alertIDs"`
 	NewStatus   *AlertStatus `json:"newStatus,omitempty"`
 	NoiseReason *string      `json:"noiseReason,omitempty"`
+	// Explicitly assign the alerts to this user, freezing the assignment so it no
+	// longer tracks the on-call user. Does not affect notification routing.
+	AssignedUserID *string `json:"assignedUserID,omitempty"`
+	// Clear any explicit assignment, returning the alerts to tracking the on-call
+	// user. Takes precedence over assignedUserID.
+	ClearAssignment *bool `json:"clearAssignment,omitempty"`
 }
 
 type UpdateBasicAuthInput struct {
