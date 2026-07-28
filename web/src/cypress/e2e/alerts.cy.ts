@@ -479,6 +479,43 @@ function testAlerts(screen: ScreenFormat): void {
     })
   })
 
+  describe('Alert Comments', () => {
+    let alert: Alert
+
+    beforeEach(() => {
+      return cy.createAlert().then((a: Alert) => {
+        alert = a
+      })
+    })
+
+    it('should add a comment and show who and when', () => {
+      cy.visit(`/alerts/${alert.id}`)
+
+      cy.get('[data-cy=alert-comments]').should('not.contain', 'looking into')
+      cy.get('body').should('contain', 'No comments yet')
+
+      cy.get('[data-cy=new-comment] textarea').first().type('looking into this')
+      cy.get('button[aria-label="Add Comment"]').click()
+
+      // who and when, alongside the text
+      cy.get('[data-cy=alert-comments]')
+        .should('contain', 'looking into this')
+        .should('contain', 'Cypress User')
+        .should('contain', 'ago')
+    })
+
+    it('should reject an empty comment', () => {
+      cy.visit(`/alerts/${alert.id}`)
+
+      // nothing typed -- the button stays disabled
+      cy.get('button[aria-label="Add Comment"]').should('be.disabled')
+
+      // whitespace only is still nothing to say
+      cy.get('[data-cy=new-comment] textarea').first().type('   ')
+      cy.get('button[aria-label="Add Comment"]').should('be.disabled')
+    })
+  })
+
   describe('Alert Assignment', () => {
     let svc: Service
     let alert: Alert

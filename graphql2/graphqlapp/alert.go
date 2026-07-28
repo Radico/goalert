@@ -514,6 +514,44 @@ func (a *Alert) AssignmentSource(ctx context.Context, raw *alert.Alert) (alert.A
 	return as.Source, nil
 }
 
+// AlertComment resolves fields on a single comment.
+type AlertComment App
+
+func (a *App) AlertComment() graphql2.AlertCommentResolver { return (*AlertComment)(a) }
+
+func (c *AlertComment) ID(ctx context.Context, raw *alert.Comment) (string, error) {
+	return strconv.Itoa(raw.ID), nil
+}
+
+func (c *AlertComment) User(ctx context.Context, raw *alert.Comment) (*user.User, error) {
+	// Empty when the author's account was deleted; the comment is retained.
+	if raw.UserID == "" {
+		return nil, nil
+	}
+	return (*App)(c).FindOneUser(ctx, raw.UserID)
+}
+
+func (a *Alert) Comments(ctx context.Context, raw *alert.Alert) ([]alert.Comment, error) {
+	return (*App)(a).FindAlertComments(ctx, raw.ID)
+}
+
+func (m *Mutation) AddAlertComment(ctx context.Context, input graphql2.AddAlertCommentInput) (*alert.Comment, error) {
+	return m.AlertStore.AddComment(ctx, input.AlertID, input.Body)
+}
+
+func (m *Mutation) DeleteAlertComment(ctx context.Context, id string) (bool, error) {
+	commentID, err := strconv.Atoi(id)
+	if err != nil {
+		return false, validation.NewFieldError("id", "must be a comment ID")
+	}
+
+	err = m.AlertStore.DeleteComment(ctx, commentID)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (m *Mutation) SetAlertNoiseReason(ctx context.Context, input graphql2.SetAlertNoiseReasonInput) (bool, error) {
 	err := m.AlertStore.UpdateFeedback(ctx, &alert.Feedback{
 		ID:          input.AlertID,
