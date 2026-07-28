@@ -16,6 +16,7 @@ const (
 	TypePolicyUpdated      Type = "policy_updated"
 	TypeDuplicateSupressed Type = "duplicate_suppressed"
 	TypeEscalationRequest  Type = "escalation_request"
+	TypeAssignmentChanged  Type = "assignment_changed"
 
 	// not exported, status_changed will be turned into an acknowledged where appropriate
 	_TypeStatusChanged Type = "status_changed"

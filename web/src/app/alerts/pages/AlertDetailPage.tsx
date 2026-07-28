@@ -14,6 +14,11 @@ const query = gql`
       details
       createdAt
       noiseReason
+      assignedUser {
+        id
+        name
+      }
+      assignmentSource
       service {
         id
         name

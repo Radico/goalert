@@ -12,6 +12,8 @@ export interface ActionInput {
 
 export interface Alert {
   alertID: number
+  assignedUser?: null | User
+  assignmentSource: AlertAssignmentSource
   createdAt: ISOTimestamp
   details: string
   id: string
@@ -27,6 +29,8 @@ export interface Alert {
   status: AlertStatus
   summary: string
 }
+
+export type AlertAssignmentSource = 'explicit' | 'onCall' | 'unassigned'
 
 export interface AlertConnection {
   nodes: Alert[]
@@ -86,6 +90,7 @@ export interface AlertRecentEventsOptions {
 
 export interface AlertSearchOptions {
   after?: null | string
+  assignedUserID?: null | string
   closedBefore?: null | ISOTimestamp
   createdBefore?: null | ISOTimestamp
   favoritesOnly?: null | boolean
@@ -1311,6 +1316,8 @@ export interface UpdateAlertsByServiceInput {
 
 export interface UpdateAlertsInput {
   alertIDs: number[]
+  assignedUserID?: null | string
+  clearAssignment?: null | boolean
   newStatus?: null | AlertStatus
   noiseReason?: null | string
 }
@@ -1636,6 +1643,7 @@ type ConfigID =
   | 'General.DisableSMSLinks'
   | 'General.DisableLabelCreation'
   | 'General.DisableCalendarSubscriptions'
+  | 'General.EnableAlertAssignment'
   | 'Services.RequiredLabels'
   | 'Maintenance.AlertCleanupDays'
   | 'Maintenance.AlertAutoCloseDays'

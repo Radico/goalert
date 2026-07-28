@@ -43,6 +43,7 @@ type loaders struct {
 	NC                        *dataloader.Loader[string, notificationchannel.Channel]
 	AlertMetrics              *dataloader.Loader[int, alertmetrics.Metric]
 	AlertFeedback             *dataloader.Loader[int, alert.Feedback]
+	AlertAssignment           *dataloader.Loader[int, alert.Assignment]
 	AlertMetadata             *dataloader.Loader[int, alert.MetadataAlertID]
 	AlertsByStatus            *dataloader.AggFetcher[uuid.UUID, gadb.ServiceAlertCountsRow]
 	AlertStats                *dataloader.AggFetcherParam[uuid.UUID, AlertStatsParam, gadb.ServiceAlertStatsRow]
@@ -72,6 +73,7 @@ func (a *App) registerLoaders(ctx context.Context) context.Context {
 		NC:                        dataloader.NewStoreLoader(ctx, a.NCStore.FindMany, func(nc notificationchannel.Channel) string { return nc.ID.String() }),
 		AlertMetrics:              dataloader.NewStoreLoader(ctx, a.AlertMetricsStore.FindMetrics, func(m alertmetrics.Metric) int { return m.ID }),
 		AlertFeedback:             dataloader.NewStoreLoader(ctx, a.AlertStore.Feedback, func(f alert.Feedback) int { return f.ID }),
+		AlertAssignment:           dataloader.NewStoreLoader(ctx, a.AlertStore.Assignments, func(as alert.Assignment) int { return as.AlertID }),
 		AlertMetadata: dataloader.NewStoreLoader(ctx, func(ctx context.Context, i []int) ([]alert.MetadataAlertID, error) {
 			return a.AlertStore.FindManyMetadata(ctx, a.DB, i)
 		}, func(md alert.MetadataAlertID) int { return int(md.ID) }),
@@ -224,6 +226,22 @@ func (app *App) FindOneAlertFeedback(ctx context.Context, id int) (*alert.Feedba
 			return nil, nil
 		}
 		return &feedback[0], nil
+	}
+
+	return loader.FetchOne(ctx, id)
+}
+
+func (app *App) FindOneAlertAssignment(ctx context.Context, id int) (*alert.Assignment, error) {
+	loader := loadersFrom(ctx).AlertAssignment
+	if loader == nil {
+		assignments, err := app.AlertStore.Assignments(ctx, []int{id})
+		if err != nil {
+			return nil, err
+		}
+		if len(assignments) == 0 {
+			return nil, nil
+		}
+		return &assignments[0], nil
 	}
 
 	return loader.FetchOne(ctx, id)

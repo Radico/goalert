@@ -158,3 +158,78 @@ FROM
 WHERE
     a.id = @id::bigint;
 
+-- name: Alert_GetManyExplicitAssignees :many
+-- Returns the explicitly-assigned (claimed) user for many alerts.
+--
+-- An alert with assigned_user_id set has been claimed -- either by
+-- acknowledging it or by an explicit re-assignment -- and is frozen: it no
+-- longer follows escalations or rotation handoffs.
+SELECT
+    id AS alert_id,
+    assigned_user_id
+FROM
+    alerts
+WHERE
+    id = ANY (@alert_ids::bigint[])
+    AND assigned_user_id NOTNULL;
+
+-- name: Alert_GetManyOnCallAssignees :many
+-- Returns the derived assignee for many unclaimed alerts.
+--
+-- Unclaimed alerts (assigned_user_id ISNULL) resolve to whoever is currently
+-- on-call for the alert's current escalation step, so ownership follows
+-- escalations and rotation handoffs without any writes.
+--
+-- Joining on escalation_policy_step_number (NOT NULL, default 0) rather than
+-- escalation_policy_step_id (NULL until the first escalation) means a brand new
+-- alert correctly resolves to step 0's on-call user.
+--
+-- A step can resolve to several users (overlapping schedule rules, or an
+-- override that adds without removing); DISTINCT ON takes the longest-serving.
+-- Alerts whose step resolves to nobody -- for example a step targeting only a
+-- notification channel -- return no row at all, and are therefore unassigned.
+SELECT DISTINCT ON (st.alert_id)
+    st.alert_id,
+    ocu.user_id
+FROM
+    escalation_policy_state st
+    JOIN alerts a ON a.id = st.alert_id
+        AND a.assigned_user_id ISNULL
+    JOIN escalation_policy_steps step ON step.escalation_policy_id = st.escalation_policy_id
+        AND step.step_number = st.escalation_policy_step_number
+    JOIN ep_step_on_call_users ocu ON ocu.ep_step_id = step.id
+        AND ocu.end_time ISNULL
+WHERE
+    st.alert_id = ANY (@alert_ids::bigint[])
+ORDER BY
+    st.alert_id,
+    ocu.start_time;
+
+-- name: Alert_SetManyAlertAssignees :many
+-- Explicitly assigns many alerts to a user (or clears the assignment when NULL).
+UPDATE
+    alerts
+SET
+    assigned_user_id = @assigned_user_id
+WHERE
+    id = ANY (@alert_ids::bigint[])
+    AND status != 'closed'
+    AND assigned_user_id IS DISTINCT FROM @assigned_user_id
+RETURNING
+    id;
+
+-- name: Alert_ClaimManyAlertsOnAck :many
+-- Claims ownership of alerts for the acknowledging user.
+--
+-- Only unclaimed alerts are affected, so re-acknowledging an alert can never
+-- take it away from whoever already owns it.
+UPDATE
+    alerts
+SET
+    assigned_user_id = @assigned_user_id
+WHERE
+    id = ANY (@alert_ids::bigint[])
+    AND assigned_user_id ISNULL
+RETURNING
+    id;
+

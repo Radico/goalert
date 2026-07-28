@@ -478,6 +478,89 @@ function testAlerts(screen: ScreenFormat): void {
       cy.get('body').should('not.contain', 'Load More')
     })
   })
+
+  describe('Alert Assignment', () => {
+    let svc: Service
+    let alert: Alert
+    let onCallUser: Profile
+    let otherUser: Profile
+
+    beforeEach(() => {
+      cy.updateConfig({ General: { EnableAlertAssignment: true } })
+
+      return cy
+        .createUser()
+        .then((u: Profile) => {
+          onCallUser = u
+          return cy.createUser()
+        })
+        .then((u: Profile) => {
+          otherUser = u
+          return cy.createService()
+        })
+        .then((s: Service) => {
+          svc = s
+          // The step needs a real user target -- and the engine needs to have
+          // run -- for anyone to be on-call, which is what an unclaimed alert
+          // derives its assignee from.
+          //
+          // The engine task is invoked directly rather than via engineTrigger(),
+          // which also calls refetchAll() and so requires the app to already be
+          // loaded in the browser. Each test visits its own page below.
+          return cy
+            .createEPStep({
+              epID: s.epID,
+              targets: [{ type: 'user', id: onCallUser.id }],
+            })
+            .task('engine:trigger')
+            .then(() => cy.createAlert({ serviceID: s.id }))
+        })
+        .then((a: Alert) => {
+          alert = a
+        })
+    })
+
+    it('should assign an alert to a user', () => {
+      cy.visit(`/alerts?allServices=1&search=${svc.name}`)
+
+      cy.get(`span[data-cy=item-${alert.id}] input`).check()
+      cy.get('button[aria-label=Assign]').click()
+
+      cy.dialogTitle('Assign Alerts')
+      cy.dialogForm({ assignedUserID: otherUser.name })
+      cy.dialogFinish('Assign')
+
+      cy.visit(`/alerts/${alert.id}`)
+      cy.get('[data-cy=alert-assignee]')
+        .should('contain', 'Assigned to')
+        .should('contain', otherUser.name)
+    })
+
+    it('should show the on-call user as the unclaimed assignee', () => {
+      cy.visit(`/alerts/${alert.id}`)
+
+      // nobody has claimed it, so it reports the on-call user and says so
+      cy.get('[data-cy=alert-assignee]')
+        .should('contain', 'unclaimed')
+        .should('contain', onCallUser.name)
+    })
+
+    it('should hide assignment when disabled', () => {
+      cy.updateConfig({ General: { EnableAlertAssignment: false } })
+      cy.visit(`/alerts/${alert.id}`)
+
+      cy.get('[data-cy=alert-assignee]').should('not.exist')
+    })
+
+    it('should offer an assigned to me filter', () => {
+      cy.visit('/alerts?allServices=1')
+
+      cy.get('button[aria-label="Filter Alerts"]').click()
+      cy.get('span[data-cy=toggle-assigned-to-me]').click()
+
+      cy.url().should('contain', 'assignedToMe=1')
+    })
+  })
 }
 
 testScreen('Alerts', testAlerts)

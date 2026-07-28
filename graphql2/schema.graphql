@@ -835,6 +835,18 @@ input UpdateAlertsInput {
 
   newStatus: AlertStatus
   noiseReason: String
+
+  """
+  Explicitly assign the alerts to this user, freezing the assignment so it no
+  longer tracks the on-call user. Does not affect notification routing.
+  """
+  assignedUserID: ID
+
+  """
+  Clear any explicit assignment, returning the alerts to tracking the on-call
+  user. Takes precedence over assignedUserID.
+  """
+  clearAssignment: Boolean
 }
 
 input UpdateRotationInput {
@@ -972,6 +984,12 @@ input AlertSearchOptions {
   notCreatedBefore: ISOTimestamp
   closedBefore: ISOTimestamp
   notClosedBefore: ISOTimestamp
+
+  """
+  Restrict results to alerts assigned to this user, either explicitly or by
+  them being on-call for the alert's current escalation step.
+  """
+  assignedUserID: ID
 }
 
 enum AlertSearchSort {
@@ -1038,6 +1056,37 @@ type Alert {
   meta: [AlertMetadata!]
 
   metaValue(key: String!): String!
+
+  """
+  The user who currently owns this alert, if any.
+
+  While the alert is unclaimed this is whoever is on-call for its current
+  escalation step, and it changes as the alert escalates or rotations hand off.
+  Once claimed it is frozen. Assignment never affects notification routing.
+  """
+  assignedUser: User
+
+  """
+  Where assignedUser came from.
+  """
+  assignmentSource: AlertAssignmentSource!
+}
+
+enum AlertAssignmentSource {
+  """
+  No explicit assignee, and nobody is on-call for the alert's current step.
+  """
+  unassigned
+
+  """
+  Derived from the user on-call for the alert's current escalation step.
+  """
+  onCall
+
+  """
+  Claimed by acknowledging the alert, or set by an explicit re-assignment.
+  """
+  explicit
 }
 
 type AlertMetric {
