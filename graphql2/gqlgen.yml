@@ -45,6 +45,8 @@ models:
     model: github.com/target/goalert/service.Urgency
   AlertAssignmentSource:
     model: github.com/target/goalert/alert.AssignmentSource
+  AlertComment:
+    model: github.com/target/goalert/alert.Comment
   ISOTimestamp:
     model: github.com/target/goalert/graphql2.ISOTimestamp
   ISODuration:

@@ -1080,6 +1080,11 @@ type Alert {
   Where assignedUser came from.
   """
   assignmentSource: AlertAssignmentSource!
+
+  """
+  User-authored comments on this alert, oldest first.
+  """
+  comments: [AlertComment!]!
 }
 
 enum AlertAssignmentSource {
