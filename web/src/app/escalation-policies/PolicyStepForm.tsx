@@ -5,7 +5,12 @@ import Grid from '@mui/material/Grid'
 import NumberField from '../util/NumberField'
 import { DestinationInput, StringMap } from '../../schema'
 import DestinationInputChip from '../util/DestinationInputChip'
-import { TextField, Typography } from '@mui/material'
+import {
+  Checkbox,
+  FormControlLabel,
+  TextField,
+  Typography,
+} from '@mui/material'
 import { renderMenuItem } from '../selection/DisableableMenuItem'
 import DestinationField from '../selection/DestinationField'
 import { useEPTargetTypes } from '../util/RequireConfig'
@@ -28,6 +33,7 @@ const useStyles = makeStyles(() => {
 export type FormValue = {
   delayMinutes: number
   actions: DestinationInput[]
+  skipIfEmpty: boolean
 }
 
 export type PolicyStepFormProps = {
@@ -200,6 +206,29 @@ export default function PolicyStepForm(props: PolicyStepFormProps): ReactNode {
                 : `This will cause the step to escalate after ${props.value.delayMinutes}m`
             }
           />
+        </Grid>
+
+        <Grid item xs={12}>
+          <FormControlLabel
+            control={
+              <FormField
+                noError
+                component={Checkbox}
+                checkbox
+                disabled={props.disabled}
+                name='skipIfEmpty'
+              />
+            }
+            label='Skip if no one is on-call'
+            labelPlacement='end'
+          />
+          <Typography variant='caption' color='textSecondary' component='p'>
+            Escalate immediately, without waiting the delay above, when this
+            step has no one on-call and no notification channels. On-call is
+            resolved once, when the step is reached, so waiting would not notify
+            anyone who comes on-call during the delay. This has no effect on the
+            last step, which always waits before the policy repeats.
+          </Typography>
         </Grid>
       </Grid>
     </FormContainer>

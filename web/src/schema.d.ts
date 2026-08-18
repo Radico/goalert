@@ -272,6 +272,7 @@ export interface CreateEscalationPolicyStepInput {
   escalationPolicyID?: null | string
   newRotation?: null | CreateRotationInput
   newSchedule?: null | CreateScheduleInput
+  skipIfEmpty?: null | boolean
   targets?: null | TargetInput[]
 }
 
@@ -548,6 +549,7 @@ export interface EscalationPolicyStep {
   delayMinutes: number
   escalationPolicy?: null | EscalationPolicy
   id: string
+  skipIfEmpty: boolean
   stepNumber: number
   targets: Target[]
 }
@@ -1360,6 +1362,7 @@ export interface UpdateEscalationPolicyStepInput {
   actions?: null | DestinationInput[]
   delayMinutes?: null | number
   id: string
+  skipIfEmpty?: null | boolean
   targets?: null | TargetInput[]
 }
 
