@@ -331,6 +331,7 @@ type ComplexityRoot struct {
 		DelayMinutes     func(childComplexity int) int
 		EscalationPolicy func(childComplexity int) int
 		ID               func(childComplexity int) int
+		SkipIfEmpty      func(childComplexity int) int
 		StepNumber       func(childComplexity int) int
 		Targets          func(childComplexity int) int
 	}
@@ -2082,6 +2083,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.EscalationPolicyStep.ID(childComplexity), true
+	case "EscalationPolicyStep.skipIfEmpty":
+		if e.ComplexityRoot.EscalationPolicyStep.SkipIfEmpty == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EscalationPolicyStep.SkipIfEmpty(childComplexity), true
 	case "EscalationPolicyStep.stepNumber":
 		if e.ComplexityRoot.EscalationPolicyStep.StepNumber == nil {
 			break
@@ -5559,6 +5566,8 @@ func (ec *executionContext) childFields_EscalationPolicyStep(ctx context.Context
 		return ec.fieldContext_EscalationPolicyStep_stepNumber(ctx, field)
 	case "delayMinutes":
 		return ec.fieldContext_EscalationPolicyStep_delayMinutes(ctx, field)
+	case "skipIfEmpty":
+		return ec.fieldContext_EscalationPolicyStep_skipIfEmpty(ctx, field)
 	case "targets":
 		return ec.fieldContext_EscalationPolicyStep_targets(ctx, field)
 	case "escalationPolicy":
@@ -11739,6 +11748,29 @@ func (ec *executionContext) _EscalationPolicyStep_delayMinutes(ctx context.Conte
 }
 func (ec *executionContext) fieldContext_EscalationPolicyStep_delayMinutes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("EscalationPolicyStep", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _EscalationPolicyStep_skipIfEmpty(ctx context.Context, field graphql.CollectedField, obj *escalation.Step) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EscalationPolicyStep_skipIfEmpty(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SkipIfEmpty, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EscalationPolicyStep_skipIfEmpty(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EscalationPolicyStep", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
 func (ec *executionContext) _EscalationPolicyStep_targets(ctx context.Context, field graphql.CollectedField, obj *escalation.Step) (ret graphql.Marshaler) {
@@ -25429,7 +25461,7 @@ func (ec *executionContext) unmarshalInputCreateEscalationPolicyStepInput(ctx co
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"escalationPolicyID", "delayMinutes", "targets", "newRotation", "newSchedule", "actions"}
+	fieldsInOrder := [...]string{"escalationPolicyID", "delayMinutes", "skipIfEmpty", "targets", "newRotation", "newSchedule", "actions"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -25450,6 +25482,13 @@ func (ec *executionContext) unmarshalInputCreateEscalationPolicyStepInput(ctx co
 				return it, err
 			}
 			it.DelayMinutes = data
+		case "skipIfEmpty":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("skipIfEmpty"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.SkipIfEmpty = data
 		case "targets":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("targets"))
 			data, err := ec.unmarshalOTargetInput2ᚕgithubᚗcomᚋtargetᚋgoalertᚋassignmentᚐRawTargetᚄ(ctx, v)
@@ -28373,7 +28412,7 @@ func (ec *executionContext) unmarshalInputUpdateEscalationPolicyStepInput(ctx co
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"id", "delayMinutes", "targets", "actions"}
+	fieldsInOrder := [...]string{"id", "delayMinutes", "skipIfEmpty", "targets", "actions"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -28394,6 +28433,13 @@ func (ec *executionContext) unmarshalInputUpdateEscalationPolicyStepInput(ctx co
 				return it, err
 			}
 			it.DelayMinutes = data
+		case "skipIfEmpty":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("skipIfEmpty"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.SkipIfEmpty = data
 		case "targets":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("targets"))
 			data, err := ec.unmarshalOTargetInput2ᚕgithubᚗcomᚋtargetᚋgoalertᚋassignmentᚐRawTargetᚄ(ctx, v)
@@ -31754,6 +31800,11 @@ func (ec *executionContext) _EscalationPolicyStep(ctx context.Context, sel ast.S
 			}
 		case "delayMinutes":
 			out.Values[i] = ec._EscalationPolicyStep_delayMinutes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "skipIfEmpty":
+			out.Values[i] = ec._EscalationPolicyStep_skipIfEmpty(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}

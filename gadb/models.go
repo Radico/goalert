@@ -976,6 +976,7 @@ type EscalationPolicyStep struct {
 	Delay              int32
 	EscalationPolicyID uuid.UUID
 	ID                 uuid.UUID
+	SkipIfEmpty        bool
 	StepNumber         int32
 }
 

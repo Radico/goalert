@@ -22,6 +22,11 @@ type Step struct {
 	PolicyID     string    `json:"escalation_policy_id"`
 	DelayMinutes int       `json:"delay_minutes"`
 	StepNumber   int       `json:"step_number"`
+
+	// SkipIfEmpty escalates immediately, rather than waiting out DelayMinutes,
+	// when the step resolves to no one: no on-call users and no notification
+	// channels.
+	SkipIfEmpty bool `json:"skip_if_empty"`
 }
 
 func (s Step) Delay() time.Duration {
