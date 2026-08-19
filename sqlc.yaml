@@ -42,6 +42,14 @@ sql:
             go_type:
               import: github.com/target/goalert/util/timeutil
               type: Clock
+          - column: public.service_notification_rules.start_time
+            go_type:
+              import: github.com/target/goalert/util/timeutil
+              type: Clock
+          - column: public.service_notification_rules.end_time
+            go_type:
+              import: github.com/target/goalert/util/timeutil
+              type: Clock
           - column: public.outgoing_messages.provider_msg_id
             go_type:
               type: ProviderMessageID

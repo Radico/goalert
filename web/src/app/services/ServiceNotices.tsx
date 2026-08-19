@@ -4,12 +4,20 @@ import { Button, Grid } from '@mui/material'
 import { DateTime } from 'luxon'
 import Notices, { Notice } from '../details/Notices'
 import { Time } from '../util/Time'
+import { ruleSummary } from '../schedules/util'
 
 const query = gql`
   query serviceMaintenanceQuery($serviceID: ID!) {
     service(id: $serviceID) {
       maintenanceExpiresAt
       notificationUrgency
+      notificationTimeZone
+      notificationSuppressed
+      notificationRules {
+        start
+        end
+        weekdayFilter
+      }
 
       notices {
         type
@@ -72,6 +80,36 @@ export default function ServiceNotices({
           >
             Set High Urgency
           </Button>
+        ),
+      },
+      ...notices,
+    ]
+  }
+
+  if (
+    data?.service?.notificationUrgency === 'scheduled' &&
+    data?.service?.notificationSuppressed
+  ) {
+    notices = [
+      {
+        type: 'WARNING',
+        message: 'Outside Alerting Window',
+        details: (
+          <React.Fragment>
+            Alerts are being recorded, but nobody is notified. Anything captured
+            now will notify when the next window opens.
+            {data.service.notificationTimeZone && (
+              <React.Fragment>
+                <br />
+                Alerting windows ({data.service.notificationTimeZone}):{' '}
+                {ruleSummary(
+                  data.service.notificationRules ?? [],
+                  data.service.notificationTimeZone,
+                  data.service.notificationTimeZone,
+                )}
+              </React.Fragment>
+            )}
+          </React.Fragment>
         ),
       },
       ...notices,

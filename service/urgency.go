@@ -14,6 +14,13 @@ const (
 	// in the UI, but the escalation policy is never run for them, so no
 	// notifications are sent.
 	UrgencyLow Urgency = "low"
+
+	// UrgencyScheduled notifies only during the service's configured weekly
+	// alerting windows (see NotificationRule). Outside those windows it behaves
+	// exactly like UrgencyLow: alerts are recorded, but the escalation policy is
+	// not run. An alert captured outside a window escalates when the window next
+	// opens, because its escalation policy never started.
+	UrgencyScheduled Urgency = "scheduled"
 )
 
 // Scan handles reading Urgency from the DB format.

@@ -330,6 +330,8 @@ export interface CreateServiceInput {
   newEscalationPolicy?: null | CreateEscalationPolicyInput
   newHeartbeatMonitors?: null | CreateHeartbeatMonitorInput[]
   newIntegrationKeys?: null | CreateIntegrationKeyInput[]
+  notificationRules?: null | ServiceNotificationRuleInput[]
+  notificationTimeZone?: null | string
   notificationUrgency?: null | ServiceUrgency
 }
 
@@ -1116,6 +1118,9 @@ export interface Service {
   maintenanceExpiresAt?: null | ISOTimestamp
   name: string
   notices: Notice[]
+  notificationRules: ServiceNotificationRule[]
+  notificationSuppressed: boolean
+  notificationTimeZone?: null | string
   notificationUrgency: ServiceUrgency
   onCallUsers: ServiceOnCallUser[]
   recentEvents: AlertLogEntryConnection
@@ -1130,6 +1135,18 @@ export interface ServiceAlertStatsOptions {
 export interface ServiceConnection {
   nodes: Service[]
   pageInfo: PageInfo
+}
+
+export interface ServiceNotificationRule {
+  end: ClockTime
+  start: ClockTime
+  weekdayFilter: WeekdayFilter
+}
+
+export interface ServiceNotificationRuleInput {
+  end: ClockTime
+  start: ClockTime
+  weekdayFilter: WeekdayFilter
 }
 
 export interface ServiceOnCallUser {
@@ -1148,7 +1165,7 @@ export interface ServiceSearchOptions {
   search?: null | string
 }
 
-export type ServiceUrgency = 'high' | 'low'
+export type ServiceUrgency = 'high' | 'low' | 'scheduled'
 
 export interface SetAlertNoiseReasonInput {
   alertID: number
@@ -1415,6 +1432,8 @@ export interface UpdateServiceInput {
   id: string
   maintenanceExpiresAt?: null | ISOTimestamp
   name?: null | string
+  notificationRules?: null | ServiceNotificationRuleInput[]
+  notificationTimeZone?: null | string
   notificationUrgency?: null | ServiceUrgency
 }
 

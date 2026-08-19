@@ -317,6 +317,10 @@ export default function AlertDetails(
     if (status === 'StatusClosed') return []
     const isMaintMode = Boolean(props.data?.service?.maintenanceExpiresAt)
 
+    // Outside its alerting window the backend refuses manual escalation too,
+    // so disable the button rather than let it fail.
+    const isSuppressed = Boolean(props.data?.service?.notificationSuppressed)
+
     return [
       <ButtonGroup
         key='update-alert-buttons'
@@ -334,7 +338,7 @@ export default function AlertDetails(
         <Button
           startIcon={<EscalateIcon />}
           onClick={() => alertAction('alert_escalated', escalate)}
-          disabled={isMaintMode}
+          disabled={isMaintMode || isSuppressed}
         >
           Escalate
         </Button>

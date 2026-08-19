@@ -3,6 +3,7 @@
 SELECT
     maintenance_expires_at NOTNULL::bool AS is_maint_mode,
     (svc.notification_urgency = 'low')::bool AS is_low_urgency,
+    svc.notification_suppressed AS is_outside_alert_window,
     alerts.status
 FROM
     services svc

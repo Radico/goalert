@@ -6,6 +6,13 @@ import { FormContainer, FormField } from '../forms'
 import { useConfigValue } from '../util/RequireConfig'
 import { Label, ServiceUrgency } from '../../schema'
 import { InputAdornment, MenuItem } from '@mui/material'
+import { ExpFlag, useExpFlag } from '../util/useExpFlag'
+import ServiceAlertScheduleForm from './ServiceAlertScheduleForm'
+import {
+  AlertScheduleRule,
+  newAlertScheduleRule,
+  remapRulesToZone,
+} from './alertScheduleUtil'
 
 const MaxDetailsLength = 6 * 1024 // 6KiB
 
@@ -21,6 +28,11 @@ const urgencyOptions: { value: ServiceUrgency; label: string; hint: string }[] =
       label: 'Low',
       hint: 'Alerts are recorded for tracking only; nobody is notified.',
     },
+    {
+      value: 'scheduled',
+      label: 'Scheduled',
+      hint: 'Alerts notify only during the windows below. Outside them they are recorded only, and notify when the next window opens.',
+    },
   ]
 
 export interface Value {
@@ -28,6 +40,8 @@ export interface Value {
   description: string
   escalationPolicyID?: string
   notificationUrgency?: ServiceUrgency
+  notificationTimeZone?: string
+  notificationRules?: AlertScheduleRule[]
   labels: Label[]
 }
 
@@ -73,10 +87,53 @@ export default function ServiceForm(props: ServiceFormProps): JSX.Element {
   ].filter((e) => e.message)
 
   const [reqLabels] = useConfigValue('Services.RequiredLabels') as [string[]]
+  const alertScheduleEnabled = useExpFlag('svc-alert-schedule')
+
+  // Hide the Scheduled option unless the flag is on -- but keep it visible for
+  // a service already using it, so its urgency is never silently misreported.
+  const options = urgencyOptions.filter(
+    (o) =>
+      o.value !== 'scheduled' ||
+      alertScheduleEnabled ||
+      props.value.notificationUrgency === 'scheduled',
+  )
+
+  const handleChange = (val: Value): void => {
+    const prevZone = props.value.notificationTimeZone
+    const nextZone = val.notificationTimeZone
+
+    // Window times are wall-clock in the alerting zone. Changing the zone must
+    // keep the times the user is looking at, not silently reinterpret them.
+    if (nextZone && nextZone !== prevZone && val.notificationRules?.length) {
+      val = {
+        ...val,
+        notificationRules: remapRulesToZone(
+          val.notificationRules,
+          prevZone,
+          nextZone,
+        ),
+      }
+    }
+
+    // Selecting Scheduled with no windows would leave the table empty and the
+    // service unable to save; seed one as soon as the mode is picked.
+    if (
+      val.notificationUrgency === 'scheduled' &&
+      !val.notificationRules?.length
+    ) {
+      val = {
+        ...val,
+        notificationRules: [newAlertScheduleRule(nextZone)],
+      }
+    }
+
+    props.onChange(val)
+  }
 
   return (
     <FormContainer
       {...containerProps}
+      onChange={handleChange}
       errors={formErrs}
       optionalLabels={epRequired}
     >
@@ -120,18 +177,30 @@ export default function ServiceForm(props: ServiceFormProps): JSX.Element {
             label='Urgency'
             name='notificationUrgency'
             hint={
-              urgencyOptions.find(
+              options.find(
                 (o) => o.value === (props.value.notificationUrgency || 'high'),
               )?.hint
             }
           >
-            {urgencyOptions.map((o) => (
+            {options.map((o) => (
               <MenuItem value={o.value} key={o.value}>
                 {o.label}
               </MenuItem>
             ))}
           </FormField>
         </Grid>
+        {props.value.notificationUrgency === 'scheduled' && (
+          <ExpFlag flag='svc-alert-schedule'>
+            <ServiceAlertScheduleForm
+              disabled={props.disabled}
+              timeZone={props.value.notificationTimeZone}
+              rules={props.value.notificationRules ?? []}
+              onChangeRules={(notificationRules) =>
+                props.onChange({ ...props.value, notificationRules })
+              }
+            />
+          </ExpFlag>
+        )}
         {reqLabels &&
           reqLabels.map((labelName: string, idx: number) => (
             <Grid item xs={12} key={labelName}>
