@@ -58,6 +58,7 @@ type Config = graphql.Config[ResolverRoot, DirectiveRoot, ComplexityRoot]
 
 type ResolverRoot interface {
 	Alert() AlertResolver
+	AlertComment() AlertCommentResolver
 	AlertLogEntry() AlertLogEntryResolver
 	AlertMetric() AlertMetricResolver
 	Destination() DestinationResolver
@@ -105,6 +106,7 @@ type ComplexityRoot struct {
 		AlertID              func(childComplexity int) int
 		AssignedUser         func(childComplexity int) int
 		AssignmentSource     func(childComplexity int) int
+		Comments             func(childComplexity int) int
 		CreatedAt            func(childComplexity int) int
 		Details              func(childComplexity int) int
 		ID                   func(childComplexity int) int
@@ -119,6 +121,13 @@ type ComplexityRoot struct {
 		State                func(childComplexity int) int
 		Status               func(childComplexity int) int
 		Summary              func(childComplexity int) int
+	}
+
+	AlertComment struct {
+		Body      func(childComplexity int) int
+		CreatedAt func(childComplexity int) int
+		ID        func(childComplexity int) int
+		User      func(childComplexity int) int
 	}
 
 	AlertConnection struct {
@@ -333,6 +342,7 @@ type ComplexityRoot struct {
 		DelayMinutes     func(childComplexity int) int
 		EscalationPolicy func(childComplexity int) int
 		ID               func(childComplexity int) int
+		SkipIfEmpty      func(childComplexity int) int
 		StepNumber       func(childComplexity int) int
 		Targets          func(childComplexity int) int
 	}
@@ -462,6 +472,7 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
+		AddAlertComment                    func(childComplexity int, input AddAlertCommentInput) int
 		AddAuthSubject                     func(childComplexity int, input user.AuthSubject) int
 		ClearTemporarySchedules            func(childComplexity int, input ClearTemporarySchedulesInput) int
 		CloseMatchingAlert                 func(childComplexity int, input CloseMatchingAlertInput) int
@@ -482,6 +493,7 @@ type ComplexityRoot struct {
 		CreateUserOverride                 func(childComplexity int, input CreateUserOverrideInput) int
 		DebugCarrierInfo                   func(childComplexity int, input DebugCarrierInfoInput) int
 		DebugSendSms                       func(childComplexity int, input DebugSendSMSInput) int
+		DeleteAlertComment                 func(childComplexity int, id string) int
 		DeleteAll                          func(childComplexity int, input []assignment.RawTarget) int
 		DeleteAuthSubject                  func(childComplexity int, input user.AuthSubject) int
 		DeleteGQLAPIKey                    func(childComplexity int, id string) int
@@ -908,6 +920,11 @@ type AlertResolver interface {
 	MetaValue(ctx context.Context, obj *alert.Alert, key string) (string, error)
 	AssignedUser(ctx context.Context, obj *alert.Alert) (*user.User, error)
 	AssignmentSource(ctx context.Context, obj *alert.Alert) (alert.AssignmentSource, error)
+	Comments(ctx context.Context, obj *alert.Alert) ([]alert.Comment, error)
+}
+type AlertCommentResolver interface {
+	ID(ctx context.Context, obj *alert.Comment) (string, error)
+	User(ctx context.Context, obj *alert.Comment) (*user.User, error)
 }
 type AlertLogEntryResolver interface {
 	Message(ctx context.Context, obj *alertlog.Entry) (string, error)
@@ -1013,6 +1030,8 @@ type MutationResolver interface {
 	SetSystemLimits(ctx context.Context, input []SystemLimitInput) (bool, error)
 	CreateBasicAuth(ctx context.Context, input CreateBasicAuthInput) (bool, error)
 	UpdateBasicAuth(ctx context.Context, input UpdateBasicAuthInput) (bool, error)
+	AddAlertComment(ctx context.Context, input AddAlertCommentInput) (*alert.Comment, error)
+	DeleteAlertComment(ctx context.Context, id string) (bool, error)
 	CreateGQLAPIKey(ctx context.Context, input CreateGQLAPIKeyInput) (*CreatedGQLAPIKey, error)
 	UpdateGQLAPIKey(ctx context.Context, input UpdateGQLAPIKeyInput) (bool, error)
 	DeleteGQLAPIKey(ctx context.Context, id string) (bool, error)
@@ -1231,6 +1250,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Alert.AssignmentSource(childComplexity), true
+	case "Alert.comments":
+		if e.ComplexityRoot.Alert.Comments == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Alert.Comments(childComplexity), true
 	case "Alert.createdAt":
 		if e.ComplexityRoot.Alert.CreatedAt == nil {
 			break
@@ -1325,6 +1350,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Alert.Summary(childComplexity), true
+
+	case "AlertComment.body":
+		if e.ComplexityRoot.AlertComment.Body == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AlertComment.Body(childComplexity), true
+	case "AlertComment.createdAt":
+		if e.ComplexityRoot.AlertComment.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AlertComment.CreatedAt(childComplexity), true
+	case "AlertComment.id":
+		if e.ComplexityRoot.AlertComment.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AlertComment.ID(childComplexity), true
+	case "AlertComment.user":
+		if e.ComplexityRoot.AlertComment.User == nil {
+			break
+		}
+
+		return e.ComplexityRoot.AlertComment.User(childComplexity), true
 
 	case "AlertConnection.nodes":
 		if e.ComplexityRoot.AlertConnection.Nodes == nil {
@@ -2099,6 +2149,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.EscalationPolicyStep.ID(childComplexity), true
+	case "EscalationPolicyStep.skipIfEmpty":
+		if e.ComplexityRoot.EscalationPolicyStep.SkipIfEmpty == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EscalationPolicyStep.SkipIfEmpty(childComplexity), true
 	case "EscalationPolicyStep.stepNumber":
 		if e.ComplexityRoot.EscalationPolicyStep.StepNumber == nil {
 			break
@@ -2570,6 +2626,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.MessageStatusHistory.Timestamp(childComplexity), true
 
+	case "Mutation.addAlertComment":
+		if e.ComplexityRoot.Mutation.AddAlertComment == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addAlertComment_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AddAlertComment(childComplexity, args["input"].(AddAlertCommentInput)), true
 	case "Mutation.addAuthSubject":
 		if e.ComplexityRoot.Mutation.AddAuthSubject == nil {
 			break
@@ -2790,6 +2857,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DebugSendSms(childComplexity, args["input"].(DebugSendSMSInput)), true
+	case "Mutation.deleteAlertComment":
+		if e.ComplexityRoot.Mutation.DeleteAlertComment == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteAlertComment_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteAlertComment(childComplexity, args["id"].(string)), true
 	case "Mutation.deleteAll":
 		if e.ComplexityRoot.Mutation.DeleteAll == nil {
 			break
@@ -4943,6 +5021,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	ec := newExecutionContext(opCtx, e, make(chan graphql.DeferredResult))
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputActionInput,
+		ec.unmarshalInputAddAlertCommentInput,
 		ec.unmarshalInputAlertMetadataInput,
 		ec.unmarshalInputAlertMetricsOptions,
 		ec.unmarshalInputAlertRecentEventsOptions,
@@ -5178,8 +5257,24 @@ func (ec *executionContext) childFields_Alert(ctx context.Context, field graphql
 		return ec.fieldContext_Alert_assignedUser(ctx, field)
 	case "assignmentSource":
 		return ec.fieldContext_Alert_assignmentSource(ctx, field)
+	case "comments":
+		return ec.fieldContext_Alert_comments(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Alert", field.Name)
+}
+
+func (ec *executionContext) childFields_AlertComment(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_AlertComment_id(ctx, field)
+	case "user":
+		return ec.fieldContext_AlertComment_user(ctx, field)
+	case "body":
+		return ec.fieldContext_AlertComment_body(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_AlertComment_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type AlertComment", field.Name)
 }
 
 func (ec *executionContext) childFields_AlertConnection(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -5586,6 +5681,8 @@ func (ec *executionContext) childFields_EscalationPolicyStep(ctx context.Context
 		return ec.fieldContext_EscalationPolicyStep_stepNumber(ctx, field)
 	case "delayMinutes":
 		return ec.fieldContext_EscalationPolicyStep_delayMinutes(ctx, field)
+	case "skipIfEmpty":
+		return ec.fieldContext_EscalationPolicyStep_skipIfEmpty(ctx, field)
 	case "targets":
 		return ec.fieldContext_EscalationPolicyStep_targets(ctx, field)
 	case "escalationPolicy":
@@ -6684,6 +6781,20 @@ func (ec *executionContext) field_MessageLogConnectionStats_timeSeries_args(ctx 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_addAlertComment_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (AddAlertCommentInput, error) {
+			return ec.unmarshalNAddAlertCommentInput2githubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐAddAlertCommentInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_addAuthSubject_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -6961,6 +7072,20 @@ func (ec *executionContext) field_Mutation_debugSendSMS_args(ctx context.Context
 		return nil, err
 	}
 	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteAlertComment_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -8796,6 +8921,139 @@ func (ec *executionContext) _Alert_assignmentSource(ctx context.Context, field g
 }
 func (ec *executionContext) fieldContext_Alert_assignmentSource(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Alert", field, true, true, errors.New("field of type AlertAssignmentSource does not have child fields"))
+}
+
+func (ec *executionContext) _Alert_comments(ctx context.Context, field graphql.CollectedField, obj *alert.Alert) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Alert_comments(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Alert().Comments(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []alert.Comment) graphql.Marshaler {
+			return ec.marshalNAlertComment2ᚕgithubᚗcomᚋtargetᚋgoalertᚋalertᚐCommentᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Alert_comments(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Alert",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AlertComment(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AlertComment_id(ctx context.Context, field graphql.CollectedField, obj *alert.Comment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AlertComment_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.AlertComment().ID(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AlertComment_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AlertComment", field, true, true, errors.New("field of type ID does not have child fields"))
+}
+
+func (ec *executionContext) _AlertComment_user(ctx context.Context, field graphql.CollectedField, obj *alert.Comment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AlertComment_user(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.AlertComment().User(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *user.User) graphql.Marshaler {
+			return ec.marshalOUser2ᚖgithubᚗcomᚋtargetᚋgoalertᚋuserᚐUser(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_AlertComment_user(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AlertComment",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_User(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AlertComment_body(ctx context.Context, field graphql.CollectedField, obj *alert.Comment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AlertComment_body(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Body, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AlertComment_body(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AlertComment", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _AlertComment_createdAt(ctx context.Context, field graphql.CollectedField, obj *alert.Comment) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_AlertComment_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNISOTimestamp2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_AlertComment_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("AlertComment", field, false, false, errors.New("field of type ISOTimestamp does not have child fields"))
 }
 
 func (ec *executionContext) _AlertConnection_nodes(ctx context.Context, field graphql.CollectedField, obj *AlertConnection) (ret graphql.Marshaler) {
@@ -11823,6 +12081,29 @@ func (ec *executionContext) _EscalationPolicyStep_delayMinutes(ctx context.Conte
 }
 func (ec *executionContext) fieldContext_EscalationPolicyStep_delayMinutes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("EscalationPolicyStep", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _EscalationPolicyStep_skipIfEmpty(ctx context.Context, field graphql.CollectedField, obj *escalation.Step) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EscalationPolicyStep_skipIfEmpty(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SkipIfEmpty, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EscalationPolicyStep_skipIfEmpty(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EscalationPolicyStep", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
 func (ec *executionContext) _EscalationPolicyStep_targets(ctx context.Context, field graphql.CollectedField, obj *escalation.Step) (ret graphql.Marshaler) {
@@ -15956,6 +16237,94 @@ func (ec *executionContext) fieldContext_Mutation_updateBasicAuth(ctx context.Co
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_updateBasicAuth_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_addAlertComment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_addAlertComment(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AddAlertComment(ctx, fc.Args["input"].(AddAlertCommentInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *alert.Comment) graphql.Marshaler {
+			return ec.marshalNAlertComment2ᚖgithubᚗcomᚋtargetᚋgoalertᚋalertᚐComment(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_addAlertComment(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_AlertComment(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_addAlertComment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteAlertComment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteAlertComment(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteAlertComment(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteAlertComment(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteAlertComment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -24737,6 +25106,43 @@ func (ec *executionContext) unmarshalInputActionInput(ctx context.Context, obj a
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputAddAlertCommentInput(ctx context.Context, obj any) (AddAlertCommentInput, error) {
+	var it AddAlertCommentInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"alertID", "body"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "alertID":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("alertID"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AlertID = data
+		case "body":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("body"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Body = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputAlertMetadataInput(ctx context.Context, obj any) (AlertMetadataInput, error) {
 	var it AlertMetadataInput
 	if obj == nil {
@@ -25553,7 +25959,7 @@ func (ec *executionContext) unmarshalInputCreateEscalationPolicyStepInput(ctx co
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"escalationPolicyID", "delayMinutes", "targets", "newRotation", "newSchedule", "actions"}
+	fieldsInOrder := [...]string{"escalationPolicyID", "delayMinutes", "skipIfEmpty", "targets", "newRotation", "newSchedule", "actions"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -25574,6 +25980,13 @@ func (ec *executionContext) unmarshalInputCreateEscalationPolicyStepInput(ctx co
 				return it, err
 			}
 			it.DelayMinutes = data
+		case "skipIfEmpty":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("skipIfEmpty"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.SkipIfEmpty = data
 		case "targets":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("targets"))
 			data, err := ec.unmarshalOTargetInput2ᚕgithubᚗcomᚋtargetᚋgoalertᚋassignmentᚐRawTargetᚄ(ctx, v)
@@ -28518,7 +28931,7 @@ func (ec *executionContext) unmarshalInputUpdateEscalationPolicyStepInput(ctx co
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"id", "delayMinutes", "targets", "actions"}
+	fieldsInOrder := [...]string{"id", "delayMinutes", "skipIfEmpty", "targets", "actions"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -28539,6 +28952,13 @@ func (ec *executionContext) unmarshalInputUpdateEscalationPolicyStepInput(ctx co
 				return it, err
 			}
 			it.DelayMinutes = data
+		case "skipIfEmpty":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("skipIfEmpty"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.SkipIfEmpty = data
 		case "targets":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("targets"))
 			data, err := ec.unmarshalOTargetInput2ᚕgithubᚗcomᚋtargetᚋgoalertᚋassignmentᚐRawTargetᚄ(ctx, v)
@@ -29974,6 +30394,158 @@ func (ec *executionContext) _Alert(ctx context.Context, sel ast.SelectionSet, ob
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "comments":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Alert_comments(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var alertCommentImplementors = []string{"AlertComment"}
+
+func (ec *executionContext) _AlertComment(ctx context.Context, sel ast.SelectionSet, obj *alert.Comment) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, alertCommentImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AlertComment")
+		case "id":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._AlertComment_id(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "user":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._AlertComment_user(ctx, field, obj)
+				if res == graphql.RequiredNull {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "body":
+			out.Values[i] = ec._AlertComment_body(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "createdAt":
+			out.Values[i] = ec._AlertComment_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -31981,6 +32553,11 @@ func (ec *executionContext) _EscalationPolicyStep(ctx context.Context, sel ast.S
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "skipIfEmpty":
+			out.Values[i] = ec._EscalationPolicyStep_skipIfEmpty(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "targets":
 			field := field
 
@@ -33811,6 +34388,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "updateBasicAuth":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_updateBasicAuth(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "addAlertComment":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_addAlertComment(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteAlertComment":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteAlertComment(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -39580,6 +40171,11 @@ func (ec *executionContext) unmarshalNActionInput2ᚕgithubᚗcomᚋtargetᚋgoa
 	return res, nil
 }
 
+func (ec *executionContext) unmarshalNAddAlertCommentInput2githubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐAddAlertCommentInput(ctx context.Context, v any) (AddAlertCommentInput, error) {
+	res, err := ec.unmarshalInputAddAlertCommentInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNAlert2githubᚗcomᚋtargetᚋgoalertᚋalertᚐAlert(ctx context.Context, sel ast.SelectionSet, v alert.Alert) graphql.Marshaler {
 	return ec._Alert(ctx, sel, &v)
 }
@@ -39615,6 +40211,36 @@ func (ec *executionContext) marshalNAlertAssignmentSource2githubᚗcomᚋtarget�
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) marshalNAlertComment2githubᚗcomᚋtargetᚋgoalertᚋalertᚐComment(ctx context.Context, sel ast.SelectionSet, v alert.Comment) graphql.Marshaler {
+	return ec._AlertComment(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNAlertComment2ᚕgithubᚗcomᚋtargetᚋgoalertᚋalertᚐCommentᚄ(ctx context.Context, sel ast.SelectionSet, v []alert.Comment) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAlertComment2githubᚗcomᚋtargetᚋgoalertᚋalertᚐComment(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAlertComment2ᚖgithubᚗcomᚋtargetᚋgoalertᚋalertᚐComment(ctx context.Context, sel ast.SelectionSet, v *alert.Comment) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AlertComment(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNAlertConnection2githubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐAlertConnection(ctx context.Context, sel ast.SelectionSet, v AlertConnection) graphql.Marshaler {

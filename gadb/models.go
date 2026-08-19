@@ -821,6 +821,14 @@ type Alert struct {
 	Summary         string
 }
 
+type AlertComment struct {
+	AlertID   int64
+	Body      string
+	CreatedAt time.Time
+	ID        int64
+	UserID    uuid.NullUUID
+}
+
 type AlertDatum struct {
 	AlertID  int64
 	ID       int64
@@ -977,6 +985,7 @@ type EscalationPolicyStep struct {
 	Delay              int32
 	EscalationPolicyID uuid.UUID
 	ID                 uuid.UUID
+	SkipIfEmpty        bool
 	StepNumber         int32
 }
 

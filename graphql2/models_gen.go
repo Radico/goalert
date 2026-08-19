@@ -33,6 +33,11 @@ type InlineDisplayInfo interface {
 	IsInlineDisplayInfo()
 }
 
+type AddAlertCommentInput struct {
+	AlertID int    `json:"alertID"`
+	Body    string `json:"body"`
+}
+
 type AlertConnection struct {
 	Nodes    []alert.Alert `json:"nodes"`
 	PageInfo *PageInfo     `json:"pageInfo"`
@@ -223,6 +228,7 @@ type CreateEscalationPolicyInput struct {
 type CreateEscalationPolicyStepInput struct {
 	EscalationPolicyID *string                `json:"escalationPolicyID,omitempty"`
 	DelayMinutes       int                    `json:"delayMinutes"`
+	SkipIfEmpty        *bool                  `json:"skipIfEmpty,omitempty"`
 	Targets            []assignment.RawTarget `json:"targets,omitempty"`
 	NewRotation        *CreateRotationInput   `json:"newRotation,omitempty"`
 	NewSchedule        *CreateScheduleInput   `json:"newSchedule,omitempty"`
@@ -869,6 +875,7 @@ type UpdateEscalationPolicyInput struct {
 type UpdateEscalationPolicyStepInput struct {
 	ID           string                 `json:"id"`
 	DelayMinutes *int                   `json:"delayMinutes,omitempty"`
+	SkipIfEmpty  *bool                  `json:"skipIfEmpty,omitempty"`
 	Targets      []assignment.RawTarget `json:"targets,omitempty"`
 	Actions      []gadb.DestV1          `json:"actions,omitempty"`
 }
