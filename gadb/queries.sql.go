@@ -671,6 +671,7 @@ func (q *Queries) Alert_LockManyAlertServices(ctx context.Context, alertIds []in
 const alert_LockOneAlertService = `-- name: Alert_LockOneAlertService :one
 SELECT
     maintenance_expires_at NOTNULL::bool AS is_maint_mode,
+    svc.notification_suppressed AS is_outside_alert_window,
     alerts.status
 FROM
     services svc
@@ -681,15 +682,16 @@ FOR UPDATE
 `
 
 type Alert_LockOneAlertServiceRow struct {
-	IsMaintMode bool
-	Status      EnumAlertStatus
+	IsMaintMode          bool
+	IsOutsideAlertWindow bool
+	Status               EnumAlertStatus
 }
 
 // Locks the service associated with the alert.
 func (q *Queries) Alert_LockOneAlertService(ctx context.Context, id int64) (Alert_LockOneAlertServiceRow, error) {
 	row := q.db.QueryRowContext(ctx, alert_LockOneAlertService, id)
 	var i Alert_LockOneAlertServiceRow
-	err := row.Scan(&i.IsMaintMode, &i.Status)
+	err := row.Scan(&i.IsMaintMode, &i.IsOutsideAlertWindow, &i.Status)
 	return i, err
 }
 
@@ -2242,6 +2244,103 @@ func (q *Queries) EngineIsKnownDest(ctx context.Context, dest NullDestV1) (sql.N
 	var column_1 sql.NullBool
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const escMgrScheduledServices = `-- name: EscMgrScheduledServices :many
+SELECT
+    svc.id AS service_id,
+    svc.notification_time_zone,
+    r.start_time,
+    r.end_time,
+    r.sunday,
+    r.monday,
+    r.tuesday,
+    r.wednesday,
+    r.thursday,
+    r.friday,
+    r.saturday
+FROM
+    services svc
+    JOIN service_notification_rules r ON r.service_id = svc.id
+WHERE
+    svc.alert_schedule_enabled
+`
+
+type EscMgrScheduledServicesRow struct {
+	ServiceID            uuid.UUID
+	NotificationTimeZone sql.NullString
+	StartTime            timeutil.Clock
+	EndTime              timeutil.Clock
+	Sunday               bool
+	Monday               bool
+	Tuesday              bool
+	Wednesday            bool
+	Thursday             bool
+	Friday               bool
+	Saturday             bool
+}
+
+// Returns the weekly alerting windows of every service using schedule-based
+// alerting. A service with no rules is simply absent: it can never be open, and
+// EscMgrSetSuppressedServices suppresses anything not reported as open.
+func (q *Queries) EscMgrScheduledServices(ctx context.Context) ([]EscMgrScheduledServicesRow, error) {
+	rows, err := q.db.QueryContext(ctx, escMgrScheduledServices)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EscMgrScheduledServicesRow
+	for rows.Next() {
+		var i EscMgrScheduledServicesRow
+		if err := rows.Scan(
+			&i.ServiceID,
+			&i.NotificationTimeZone,
+			&i.StartTime,
+			&i.EndTime,
+			&i.Sunday,
+			&i.Monday,
+			&i.Tuesday,
+			&i.Wednesday,
+			&i.Thursday,
+			&i.Friday,
+			&i.Saturday,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const escMgrSetSuppressedServices = `-- name: EscMgrSetSuppressedServices :exec
+UPDATE
+    services
+SET
+    notification_suppressed = (alert_schedule_enabled
+        AND NOT (id = ANY ($1::uuid[])))
+WHERE (alert_schedule_enabled
+    OR notification_suppressed)
+AND notification_suppressed IS DISTINCT FROM (alert_schedule_enabled
+    AND NOT (id = ANY ($1::uuid[])))
+`
+
+// Materializes the current alerting-window state. @open_service_ids is the set
+// of schedule-enabled services whose window is open right now; every other
+// schedule-enabled service is suppressed, and every other service is not.
+//
+// The IS DISTINCT FROM guard means the steady state writes no rows at all.
+// The leading predicate restricts this to idx_services_alert_schedule: any
+// other service is neither scheduled nor suppressed, so its value is already
+// false and cannot change.
+func (q *Queries) EscMgrSetSuppressedServices(ctx context.Context, openServiceIds []uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, escMgrSetSuppressedServices, pq.Array(openServiceIds))
+	return err
 }
 
 const findManyCalSubByUser = `-- name: FindManyCalSubByUser :many
@@ -5609,6 +5708,120 @@ func (q *Queries) ServiceAlertStats(ctx context.Context, arg ServiceAlertStatsPa
 		return nil, err
 	}
 	return items, nil
+}
+
+const serviceNotificationRules_DeleteByService = `-- name: ServiceNotificationRules_DeleteByService :exec
+DELETE FROM service_notification_rules
+WHERE service_id = $1
+`
+
+func (q *Queries) ServiceNotificationRules_DeleteByService(ctx context.Context, serviceID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, serviceNotificationRules_DeleteByService, serviceID)
+	return err
+}
+
+const serviceNotificationRules_FindMany = `-- name: ServiceNotificationRules_FindMany :many
+SELECT
+    service_id,
+    start_time,
+    end_time,
+    sunday,
+    monday,
+    tuesday,
+    wednesday,
+    thursday,
+    friday,
+    saturday
+FROM
+    service_notification_rules
+WHERE
+    service_id = ANY ($1::uuid[])
+ORDER BY
+    service_id,
+    created_at,
+    id
+`
+
+type ServiceNotificationRules_FindManyRow struct {
+	ServiceID uuid.UUID
+	StartTime timeutil.Clock
+	EndTime   timeutil.Clock
+	Sunday    bool
+	Monday    bool
+	Tuesday   bool
+	Wednesday bool
+	Thursday  bool
+	Friday    bool
+	Saturday  bool
+}
+
+// Returns the alerting windows for the given services, oldest first.
+func (q *Queries) ServiceNotificationRules_FindMany(ctx context.Context, serviceIds []uuid.UUID) ([]ServiceNotificationRules_FindManyRow, error) {
+	rows, err := q.db.QueryContext(ctx, serviceNotificationRules_FindMany, pq.Array(serviceIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ServiceNotificationRules_FindManyRow
+	for rows.Next() {
+		var i ServiceNotificationRules_FindManyRow
+		if err := rows.Scan(
+			&i.ServiceID,
+			&i.StartTime,
+			&i.EndTime,
+			&i.Sunday,
+			&i.Monday,
+			&i.Tuesday,
+			&i.Wednesday,
+			&i.Thursday,
+			&i.Friday,
+			&i.Saturday,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const serviceNotificationRules_Insert = `-- name: ServiceNotificationRules_Insert :exec
+INSERT INTO service_notification_rules (service_id, start_time, end_time, sunday, monday, tuesday, wednesday, thursday, friday, saturday)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+`
+
+type ServiceNotificationRules_InsertParams struct {
+	ServiceID uuid.UUID
+	StartTime timeutil.Clock
+	EndTime   timeutil.Clock
+	Sunday    bool
+	Monday    bool
+	Tuesday   bool
+	Wednesday bool
+	Thursday  bool
+	Friday    bool
+	Saturday  bool
+}
+
+func (q *Queries) ServiceNotificationRules_Insert(ctx context.Context, arg ServiceNotificationRules_InsertParams) error {
+	_, err := q.db.ExecContext(ctx, serviceNotificationRules_Insert,
+		arg.ServiceID,
+		arg.StartTime,
+		arg.EndTime,
+		arg.Sunday,
+		arg.Monday,
+		arg.Tuesday,
+		arg.Wednesday,
+		arg.Thursday,
+		arg.Friday,
+		arg.Saturday,
+	)
+	return err
 }
 
 const signalMgrDeleteStale = `-- name: SignalMgrDeleteStale :exec

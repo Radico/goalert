@@ -6,11 +6,19 @@ import ServiceForm from './ServiceForm'
 import { Label } from '../../schema'
 import { useErrorConsumer } from '../util/ErrorConsumer'
 import { useConfigValue } from '../util/RequireConfig'
+import {
+  AlertScheduleRule,
+  alertScheduleInput,
+  rulesFromGQL,
+} from './alertScheduleUtil'
 
 interface Value {
   name: string
   description: string
   escalationPolicyID?: string
+  alertScheduleEnabled?: boolean
+  notificationTimeZone?: string
+  notificationRules?: AlertScheduleRule[]
   labels: Label[]
 }
 
@@ -20,6 +28,13 @@ const query = gql`
       id
       name
       description
+      alertScheduleEnabled
+      notificationTimeZone
+      notificationRules {
+        start
+        end
+        weekdayFilter
+      }
       labels {
         key
         value
@@ -55,6 +70,12 @@ export default function ServiceEditDialog(props: {
     name: data?.service?.name,
     description: data?.service?.description,
     escalationPolicyID: data?.service?.ep?.id,
+    alertScheduleEnabled: data?.service?.alertScheduleEnabled,
+    notificationTimeZone: data?.service?.notificationTimeZone || '',
+    notificationRules: rulesFromGQL(
+      data?.service?.notificationRules,
+      data?.service?.notificationTimeZone,
+    ),
     labels: (data?.service?.labels || []).filter((l: Label) =>
       req.includes(l.key),
     ),
@@ -81,6 +102,11 @@ export default function ServiceEditDialog(props: {
               name: value?.name || '',
               description: value?.description || '',
               escalationPolicyID: value?.escalationPolicyID || '',
+              ...alertScheduleInput(
+                value?.alertScheduleEnabled,
+                value?.notificationTimeZone,
+                value?.notificationRules,
+              ),
             },
           },
           {

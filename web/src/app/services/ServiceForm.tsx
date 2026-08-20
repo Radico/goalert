@@ -5,7 +5,19 @@ import { EscalationPolicySelect } from '../selection/EscalationPolicySelect'
 import { FormContainer, FormField } from '../forms'
 import { useConfigValue } from '../util/RequireConfig'
 import { Label } from '../../schema'
-import { InputAdornment } from '@mui/material'
+import {
+  Checkbox,
+  FormControlLabel,
+  FormHelperText,
+  InputAdornment,
+} from '@mui/material'
+import { ExpFlag, useExpFlag } from '../util/useExpFlag'
+import ServiceAlertScheduleForm from './ServiceAlertScheduleForm'
+import {
+  AlertScheduleRule,
+  newAlertScheduleRule,
+  remapRulesToZone,
+} from './alertScheduleUtil'
 
 const MaxDetailsLength = 6 * 1024 // 6KiB
 
@@ -13,6 +25,9 @@ export interface Value {
   name: string
   description: string
   escalationPolicyID?: string
+  alertScheduleEnabled?: boolean
+  notificationTimeZone?: string
+  notificationRules?: AlertScheduleRule[]
   labels: Label[]
 }
 
@@ -58,10 +73,41 @@ export default function ServiceForm(props: ServiceFormProps): JSX.Element {
   ].filter((e) => e.message)
 
   const [reqLabels] = useConfigValue('Services.RequiredLabels') as [string[]]
+  const alertScheduleEnabled = useExpFlag('svc-alert-schedule')
+
+  const handleChange = (val: Value): void => {
+    const prevZone = props.value.notificationTimeZone
+    const nextZone = val.notificationTimeZone
+
+    // Window times are wall-clock in the alerting zone. Changing the zone must
+    // keep the times the user is looking at, not silently reinterpret them.
+    if (nextZone && nextZone !== prevZone && val.notificationRules?.length) {
+      val = {
+        ...val,
+        notificationRules: remapRulesToZone(
+          val.notificationRules,
+          prevZone,
+          nextZone,
+        ),
+      }
+    }
+
+    // Turning it on with no windows would leave the table empty and the service
+    // unable to save; seed one as soon as the box is ticked.
+    if (val.alertScheduleEnabled && !val.notificationRules?.length) {
+      val = {
+        ...val,
+        notificationRules: [newAlertScheduleRule(nextZone)],
+      }
+    }
+
+    props.onChange(val)
+  }
 
   return (
     <FormContainer
       {...containerProps}
+      onChange={handleChange}
       errors={formErrs}
       optionalLabels={epRequired}
     >
@@ -97,6 +143,38 @@ export default function ServiceForm(props: ServiceFormProps): JSX.Element {
             component={EscalationPolicySelect}
           />
         </Grid>
+        {(alertScheduleEnabled || props.value.alertScheduleEnabled) && (
+          <ExpFlag flag='svc-alert-schedule'>
+            <Grid item xs={12}>
+              <FormControlLabel
+                label='Only alert during scheduled windows'
+                control={
+                  <FormField
+                    component={Checkbox}
+                    checkbox
+                    noError
+                    name='alertScheduleEnabled'
+                  />
+                }
+              />
+              <FormHelperText>
+                Outside these windows alerts are recorded but nobody is
+                notified. Anything captured then notifies when the next window
+                opens.
+              </FormHelperText>
+            </Grid>
+            {props.value.alertScheduleEnabled && (
+              <ServiceAlertScheduleForm
+                disabled={props.disabled}
+                timeZone={props.value.notificationTimeZone}
+                rules={props.value.notificationRules ?? []}
+                onChangeRules={(notificationRules) =>
+                  handleChange({ ...props.value, notificationRules })
+                }
+              />
+            )}
+          </ExpFlag>
+        )}
         {reqLabels &&
           reqLabels.map((labelName: string, idx: number) => (
             <Grid item xs={12} key={labelName}>

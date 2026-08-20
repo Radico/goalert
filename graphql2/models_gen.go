@@ -272,14 +272,17 @@ type CreateScheduleInput struct {
 }
 
 type CreateServiceInput struct {
-	Name                 string                        `json:"name"`
-	Description          *string                       `json:"description,omitempty"`
-	Favorite             *bool                         `json:"favorite,omitempty"`
-	EscalationPolicyID   *string                       `json:"escalationPolicyID,omitempty"`
-	NewEscalationPolicy  *CreateEscalationPolicyInput  `json:"newEscalationPolicy,omitempty"`
-	NewIntegrationKeys   []CreateIntegrationKeyInput   `json:"newIntegrationKeys,omitempty"`
-	Labels               []SetLabelInput               `json:"labels,omitempty"`
-	NewHeartbeatMonitors []CreateHeartbeatMonitorInput `json:"newHeartbeatMonitors,omitempty"`
+	Name                 string                         `json:"name"`
+	Description          *string                        `json:"description,omitempty"`
+	Favorite             *bool                          `json:"favorite,omitempty"`
+	EscalationPolicyID   *string                        `json:"escalationPolicyID,omitempty"`
+	AlertScheduleEnabled *bool                          `json:"alertScheduleEnabled,omitempty"`
+	NotificationTimeZone *string                        `json:"notificationTimeZone,omitempty"`
+	NotificationRules    []ServiceNotificationRuleInput `json:"notificationRules,omitempty"`
+	NewEscalationPolicy  *CreateEscalationPolicyInput   `json:"newEscalationPolicy,omitempty"`
+	NewIntegrationKeys   []CreateIntegrationKeyInput    `json:"newIntegrationKeys,omitempty"`
+	Labels               []SetLabelInput                `json:"labels,omitempty"`
+	NewHeartbeatMonitors []CreateHeartbeatMonitorInput  `json:"newHeartbeatMonitors,omitempty"`
 }
 
 type CreateUserCalendarSubscriptionInput struct {
@@ -707,6 +710,12 @@ type ServiceConnection struct {
 	PageInfo *PageInfo         `json:"pageInfo"`
 }
 
+type ServiceNotificationRuleInput struct {
+	Start         timeutil.Clock         `json:"start"`
+	End           timeutil.Clock         `json:"end"`
+	WeekdayFilter timeutil.WeekdayFilter `json:"weekdayFilter"`
+}
+
 type ServiceSearchOptions struct {
 	First  *int     `json:"first,omitempty"`
 	After  *string  `json:"after,omitempty"`
@@ -917,6 +926,12 @@ type UpdateServiceInput struct {
 	Description          *string    `json:"description,omitempty"`
 	EscalationPolicyID   *string    `json:"escalationPolicyID,omitempty"`
 	MaintenanceExpiresAt *time.Time `json:"maintenanceExpiresAt,omitempty"`
+	AlertScheduleEnabled *bool      `json:"alertScheduleEnabled,omitempty"`
+	NotificationTimeZone *string    `json:"notificationTimeZone,omitempty"`
+	// Replaces the entire rule set. Sent together with alertScheduleEnabled and
+	// notificationTimeZone so the three always change atomically -- a service is
+	// never briefly enabled with no windows.
+	NotificationRules []ServiceNotificationRuleInput `json:"notificationRules,omitempty"`
 }
 
 type UpdateUserCalendarSubscriptionInput struct {

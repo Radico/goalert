@@ -3,7 +3,8 @@ import { gql, useMutation, CombinedError } from 'urql'
 import FormDialog from '../dialogs/FormDialog'
 import ServiceForm, { Value } from './ServiceForm'
 import { Redirect } from 'wouter'
-import { Label } from '../../schema'
+import { Label, ServiceNotificationRule } from '../../schema'
+import { alertScheduleInput } from './alertScheduleUtil'
 import { useErrorConsumer } from '../util/ErrorConsumer'
 import { useConfigValue } from '../util/RequireConfig'
 
@@ -11,6 +12,9 @@ interface InputVar {
   name: string
   description: string
   escalationPolicyID?: string
+  alertScheduleEnabled?: boolean
+  notificationTimeZone?: string
+  notificationRules?: ServiceNotificationRule[]
   favorite: boolean
   labels: Label[]
   newEscalationPolicy?: {
@@ -33,7 +37,15 @@ const createMutation = gql`
 `
 
 function inputVars(
-  { name, description, escalationPolicyID, labels }: Value,
+  {
+    name,
+    description,
+    escalationPolicyID,
+    alertScheduleEnabled,
+    notificationTimeZone,
+    notificationRules,
+    labels,
+  }: Value,
   attempt = 0,
 ): InputVar {
   const vars: InputVar = {
@@ -42,6 +54,11 @@ function inputVars(
     escalationPolicyID,
     favorite: true,
     labels,
+    ...alertScheduleInput(
+      alertScheduleEnabled,
+      notificationTimeZone,
+      notificationRules,
+    ),
   }
   if (!vars.escalationPolicyID) {
     vars.newEscalationPolicy = {

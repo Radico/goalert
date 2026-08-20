@@ -69,6 +69,8 @@ models:
     model: github.com/target/goalert/util/timeutil.Clock
   ScheduleRule:
     model: github.com/target/goalert/schedule/rule.Rule
+  ServiceNotificationRule:
+    model: github.com/target/goalert/service.NotificationRule
   UserOverride:
     model: github.com/target/goalert/override.UserOverride
   OnCallShift:

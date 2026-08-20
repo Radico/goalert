@@ -302,6 +302,7 @@ export interface CreateScheduleInput {
 }
 
 export interface CreateServiceInput {
+  alertScheduleEnabled?: null | boolean
   description?: null | string
   escalationPolicyID?: null | string
   favorite?: null | boolean
@@ -310,6 +311,8 @@ export interface CreateServiceInput {
   newEscalationPolicy?: null | CreateEscalationPolicyInput
   newHeartbeatMonitors?: null | CreateHeartbeatMonitorInput[]
   newIntegrationKeys?: null | CreateIntegrationKeyInput[]
+  notificationRules?: null | ServiceNotificationRuleInput[]
+  notificationTimeZone?: null | string
 }
 
 export interface CreateUserCalendarSubscriptionInput {
@@ -1079,6 +1082,7 @@ export interface SendSignalInput {
 }
 
 export interface Service {
+  alertScheduleEnabled: boolean
   alertStats: AlertStats
   alertsByStatus: AlertsByStatus
   description: string
@@ -1092,6 +1096,9 @@ export interface Service {
   maintenanceExpiresAt?: null | ISOTimestamp
   name: string
   notices: Notice[]
+  notificationRules: ServiceNotificationRule[]
+  notificationSuppressed: boolean
+  notificationTimeZone?: null | string
   onCallUsers: ServiceOnCallUser[]
   recentEvents: AlertLogEntryConnection
 }
@@ -1105,6 +1112,18 @@ export interface ServiceAlertStatsOptions {
 export interface ServiceConnection {
   nodes: Service[]
   pageInfo: PageInfo
+}
+
+export interface ServiceNotificationRule {
+  end: ClockTime
+  start: ClockTime
+  weekdayFilter: WeekdayFilter
+}
+
+export interface ServiceNotificationRuleInput {
+  end: ClockTime
+  start: ClockTime
+  weekdayFilter: WeekdayFilter
 }
 
 export interface ServiceOnCallUser {
@@ -1380,11 +1399,14 @@ export interface UpdateScheduleInput {
 }
 
 export interface UpdateServiceInput {
+  alertScheduleEnabled?: null | boolean
   description?: null | string
   escalationPolicyID?: null | string
   id: string
   maintenanceExpiresAt?: null | ISOTimestamp
   name?: null | string
+  notificationRules?: null | ServiceNotificationRuleInput[]
+  notificationTimeZone?: null | string
 }
 
 export interface UpdateUserCalendarSubscriptionInput {

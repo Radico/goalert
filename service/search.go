@@ -6,6 +6,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/target/goalert/gadb"
 	"github.com/target/goalert/permission"
 	"github.com/target/goalert/search"
 	"github.com/target/goalert/util/sqlutil"
@@ -52,7 +53,10 @@ var searchTemplate = template.Must(template.New("search").Funcs(search.Helpers()
 		svc.description,
 		svc.escalation_policy_id,
 		fav IS DISTINCT FROM NULL,
-		svc.maintenance_expires_at
+		svc.maintenance_expires_at,
+		svc.alert_schedule_enabled,
+		svc.notification_time_zone,
+		svc.notification_suppressed
 	FROM services svc
 	{{if not .FavoritesOnly }}LEFT {{end}}JOIN user_favorites fav ON svc.id = fav.tgt_service_id AND {{if .FavoritesUserID}}fav.user_id = :favUserID{{else}}false{{end}}
 	{{if and .IntegrationKey}}
@@ -244,13 +248,20 @@ func (s *Store) Search(ctx context.Context, opts *SearchOptions) ([]Service, err
 	for rows.Next() {
 		var s Service
 		var maintExpiresAt sql.NullTime
-		err = rows.Scan(&s.ID, &s.Name, &s.Description, &s.EscalationPolicyID, &s.isUserFavorite, &maintExpiresAt)
+		var tz sql.NullString
+		err = rows.Scan(&s.ID, &s.Name, &s.Description, &s.EscalationPolicyID, &s.isUserFavorite, &maintExpiresAt, &s.AlertScheduleEnabled, &tz, &s.NotificationSuppressed)
 		if err != nil {
 			return nil, err
 		}
 		s.MaintenanceExpiresAt = maintExpiresAt.Time
+		s.NotificationTimeZone = tz.String
 
 		result = append(result, s)
+	}
+
+	err = loadNotificationRules(ctx, gadb.New(s.db), result)
+	if err != nil {
+		return nil, err
 	}
 
 	return result, nil

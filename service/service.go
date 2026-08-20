@@ -3,6 +3,8 @@ package service
 import (
 	"time"
 
+	"github.com/target/goalert/util"
+	"github.com/target/goalert/validation"
 	"github.com/target/goalert/validation/validate"
 )
 
@@ -12,6 +14,19 @@ type Service struct {
 	Description          string
 	EscalationPolicyID   string
 	MaintenanceExpiresAt time.Time
+
+	// AlertScheduleEnabled turns on schedule-based alerting: the service then
+	// notifies only during NotificationRules, interpreted in
+	// NotificationTimeZone. The zone and rules are cleared when it is off, so a
+	// stale schedule cannot be left behind by an unrelated edit.
+	AlertScheduleEnabled bool
+	NotificationTimeZone string
+	NotificationRules    []NotificationRule
+
+	// NotificationSuppressed is materialized by the escalation manager: true
+	// while the current time falls outside every NotificationRule. Read-only
+	// from the API's point of view.
+	NotificationSuppressed bool
 
 	epName         string
 	isUserFavorite bool
@@ -45,6 +60,24 @@ func (s Service) Normalize() (*Service, error) {
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	if s.AlertScheduleEnabled {
+		// The zone is what turns the rules' wall-clock times into instants, and
+		// the engine loads it on every pass -- reject anything Go cannot resolve
+		// rather than discovering it later.
+		if _, err := util.LoadLocation(s.NotificationTimeZone); err != nil {
+			return nil, validation.NewFieldError("NotificationTimeZone", "must be a valid IANA time zone")
+		}
+
+		rules, err := normalizeNotificationRules(s.NotificationRules)
+		if err != nil {
+			return nil, err
+		}
+		s.NotificationRules = rules
+	} else {
+		s.NotificationTimeZone = ""
+		s.NotificationRules = nil
 	}
 
 	return &s, nil

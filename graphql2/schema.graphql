@@ -592,6 +592,11 @@ input CreateServiceInput {
   favorite: Boolean
 
   escalationPolicyID: ID
+
+  alertScheduleEnabled: Boolean
+  notificationTimeZone: String
+  notificationRules: [ServiceNotificationRuleInput!]
+
   newEscalationPolicy: CreateEscalationPolicyInput
   newIntegrationKeys: [CreateIntegrationKeyInput!]
   labels: [SetLabelInput!]
@@ -645,6 +650,16 @@ input UpdateServiceInput {
   description: String
   escalationPolicyID: ID
   maintenanceExpiresAt: ISOTimestamp
+
+  alertScheduleEnabled: Boolean
+  notificationTimeZone: String
+
+  """
+  Replaces the entire rule set. Sent together with alertScheduleEnabled and
+  notificationTimeZone so the three always change atomically -- a service is
+  never briefly enabled with no windows.
+  """
+  notificationRules: [ServiceNotificationRuleInput!]
 }
 
 input UpdateEscalationPolicyInput {
@@ -1105,6 +1120,22 @@ type AlertMetadata {
   value: String!
 }
 
+"""
+A recurring weekly window during which a service with alertScheduleEnabled will
+notify. Times are in the service's notificationTimeZone.
+"""
+type ServiceNotificationRule {
+  start: ClockTime!
+  end: ClockTime!
+  weekdayFilter: WeekdayFilter!
+}
+
+input ServiceNotificationRuleInput {
+  start: ClockTime!
+  end: ClockTime!
+  weekdayFilter: WeekdayFilter!
+}
+
 type Service {
   id: ID!
   name: String!
@@ -1113,6 +1144,30 @@ type Service {
   escalationPolicy: EscalationPolicy
   isFavorite: Boolean!
   maintenanceExpiresAt: ISOTimestamp
+
+  """
+  When true, alerts for this service notify only during notificationRules.
+  Outside them they are recorded for tracking only, and an alert captured
+  outside a window notifies when the window next opens.
+  """
+  alertScheduleEnabled: Boolean!
+
+  """
+  The IANA time zone the notificationRules are interpreted in. Empty unless
+  alertScheduleEnabled is true.
+  """
+  notificationTimeZone: String
+
+  """
+  The weekly alerting windows. Empty unless alertScheduleEnabled is true.
+  """
+  notificationRules: [ServiceNotificationRule!]!
+
+  """
+  True while alerts for this service are being recorded but not notified
+  because the current time falls outside every notificationRule.
+  """
+  notificationSuppressed: Boolean!
 
   onCallUsers: [ServiceOnCallUser!]!
   integrationKeys: [IntegrationKey!]!

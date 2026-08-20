@@ -711,26 +711,36 @@ type ComplexityRoot struct {
 	}
 
 	Service struct {
-		AlertStats           func(childComplexity int, input *ServiceAlertStatsOptions) int
-		AlertsByStatus       func(childComplexity int) int
-		Description          func(childComplexity int) int
-		EscalationPolicy     func(childComplexity int) int
-		EscalationPolicyID   func(childComplexity int) int
-		HeartbeatMonitors    func(childComplexity int) int
-		ID                   func(childComplexity int) int
-		IntegrationKeys      func(childComplexity int) int
-		IsFavorite           func(childComplexity int) int
-		Labels               func(childComplexity int) int
-		MaintenanceExpiresAt func(childComplexity int) int
-		Name                 func(childComplexity int) int
-		Notices              func(childComplexity int) int
-		OnCallUsers          func(childComplexity int) int
-		RecentEvents         func(childComplexity int, input *AlertRecentEventsOptions) int
+		AlertScheduleEnabled   func(childComplexity int) int
+		AlertStats             func(childComplexity int, input *ServiceAlertStatsOptions) int
+		AlertsByStatus         func(childComplexity int) int
+		Description            func(childComplexity int) int
+		EscalationPolicy       func(childComplexity int) int
+		EscalationPolicyID     func(childComplexity int) int
+		HeartbeatMonitors      func(childComplexity int) int
+		ID                     func(childComplexity int) int
+		IntegrationKeys        func(childComplexity int) int
+		IsFavorite             func(childComplexity int) int
+		Labels                 func(childComplexity int) int
+		MaintenanceExpiresAt   func(childComplexity int) int
+		Name                   func(childComplexity int) int
+		Notices                func(childComplexity int) int
+		NotificationRules      func(childComplexity int) int
+		NotificationSuppressed func(childComplexity int) int
+		NotificationTimeZone   func(childComplexity int) int
+		OnCallUsers            func(childComplexity int) int
+		RecentEvents           func(childComplexity int, input *AlertRecentEventsOptions) int
 	}
 
 	ServiceConnection struct {
 		Nodes    func(childComplexity int) int
 		PageInfo func(childComplexity int) int
+	}
+
+	ServiceNotificationRule struct {
+		End           func(childComplexity int) int
+		Start         func(childComplexity int) int
+		WeekdayFilter func(childComplexity int) int
 	}
 
 	ServiceOnCallUser struct {
@@ -4242,6 +4252,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ScheduleTarget.Target(childComplexity), true
 
+	case "Service.alertScheduleEnabled":
+		if e.ComplexityRoot.Service.AlertScheduleEnabled == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Service.AlertScheduleEnabled(childComplexity), true
 	case "Service.alertStats":
 		if e.ComplexityRoot.Service.AlertStats == nil {
 			break
@@ -4325,6 +4341,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Service.Notices(childComplexity), true
+	case "Service.notificationRules":
+		if e.ComplexityRoot.Service.NotificationRules == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Service.NotificationRules(childComplexity), true
+	case "Service.notificationSuppressed":
+		if e.ComplexityRoot.Service.NotificationSuppressed == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Service.NotificationSuppressed(childComplexity), true
+	case "Service.notificationTimeZone":
+		if e.ComplexityRoot.Service.NotificationTimeZone == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Service.NotificationTimeZone(childComplexity), true
 	case "Service.onCallUsers":
 		if e.ComplexityRoot.Service.OnCallUsers == nil {
 			break
@@ -4355,6 +4389,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ServiceConnection.PageInfo(childComplexity), true
+
+	case "ServiceNotificationRule.end":
+		if e.ComplexityRoot.ServiceNotificationRule.End == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ServiceNotificationRule.End(childComplexity), true
+	case "ServiceNotificationRule.start":
+		if e.ComplexityRoot.ServiceNotificationRule.Start == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ServiceNotificationRule.Start(childComplexity), true
+	case "ServiceNotificationRule.weekdayFilter":
+		if e.ComplexityRoot.ServiceNotificationRule.WeekdayFilter == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ServiceNotificationRule.WeekdayFilter(childComplexity), true
 
 	case "ServiceOnCallUser.stepNumber":
 		if e.ComplexityRoot.ServiceOnCallUser.StepNumber == nil {
@@ -4972,6 +5025,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputSendContactMethodVerificationInput,
 		ec.unmarshalInputSendSignalInput,
 		ec.unmarshalInputServiceAlertStatsOptions,
+		ec.unmarshalInputServiceNotificationRuleInput,
 		ec.unmarshalInputServiceSearchOptions,
 		ec.unmarshalInputSetAlertNoiseReasonInput,
 		ec.unmarshalInputSetFavoriteInput,
@@ -6107,6 +6161,14 @@ func (ec *executionContext) childFields_Service(ctx context.Context, field graph
 		return ec.fieldContext_Service_isFavorite(ctx, field)
 	case "maintenanceExpiresAt":
 		return ec.fieldContext_Service_maintenanceExpiresAt(ctx, field)
+	case "alertScheduleEnabled":
+		return ec.fieldContext_Service_alertScheduleEnabled(ctx, field)
+	case "notificationTimeZone":
+		return ec.fieldContext_Service_notificationTimeZone(ctx, field)
+	case "notificationRules":
+		return ec.fieldContext_Service_notificationRules(ctx, field)
+	case "notificationSuppressed":
+		return ec.fieldContext_Service_notificationSuppressed(ctx, field)
 	case "onCallUsers":
 		return ec.fieldContext_Service_onCallUsers(ctx, field)
 	case "integrationKeys":
@@ -6135,6 +6197,18 @@ func (ec *executionContext) childFields_ServiceConnection(ctx context.Context, f
 		return ec.fieldContext_ServiceConnection_pageInfo(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ServiceConnection", field.Name)
+}
+
+func (ec *executionContext) childFields_ServiceNotificationRule(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "start":
+		return ec.fieldContext_ServiceNotificationRule_start(ctx, field)
+	case "end":
+		return ec.fieldContext_ServiceNotificationRule_end(ctx, field)
+	case "weekdayFilter":
+		return ec.fieldContext_ServiceNotificationRule_weekdayFilter(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ServiceNotificationRule", field.Name)
 }
 
 func (ec *executionContext) childFields_ServiceOnCallUser(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -20891,6 +20965,107 @@ func (ec *executionContext) fieldContext_Service_maintenanceExpiresAt(_ context.
 	return graphql.NewScalarFieldContext("Service", field, false, false, errors.New("field of type ISOTimestamp does not have child fields"))
 }
 
+func (ec *executionContext) _Service_alertScheduleEnabled(ctx context.Context, field graphql.CollectedField, obj *service.Service) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Service_alertScheduleEnabled(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AlertScheduleEnabled, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Service_alertScheduleEnabled(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Service", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _Service_notificationTimeZone(ctx context.Context, field graphql.CollectedField, obj *service.Service) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Service_notificationTimeZone(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NotificationTimeZone, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalOString2string(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Service_notificationTimeZone(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Service", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _Service_notificationRules(ctx context.Context, field graphql.CollectedField, obj *service.Service) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Service_notificationRules(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NotificationRules, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []service.NotificationRule) graphql.Marshaler {
+			return ec.marshalNServiceNotificationRule2ᚕgithubᚗcomᚋtargetᚋgoalertᚋserviceᚐNotificationRuleᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Service_notificationRules(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Service",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ServiceNotificationRule(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Service_notificationSuppressed(ctx context.Context, field graphql.CollectedField, obj *service.Service) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Service_notificationSuppressed(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NotificationSuppressed, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Service_notificationSuppressed(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Service", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
 func (ec *executionContext) _Service_onCallUsers(ctx context.Context, field graphql.CollectedField, obj *service.Service) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -21233,6 +21408,75 @@ func (ec *executionContext) fieldContext_ServiceConnection_pageInfo(_ context.Co
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _ServiceNotificationRule_start(ctx context.Context, field graphql.CollectedField, obj *service.NotificationRule) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ServiceNotificationRule_start(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Start, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v timeutil.Clock) graphql.Marshaler {
+			return ec.marshalNClockTime2githubᚗcomᚋtargetᚋgoalertᚋutilᚋtimeutilᚐClock(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ServiceNotificationRule_start(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ServiceNotificationRule", field, false, false, errors.New("field of type ClockTime does not have child fields"))
+}
+
+func (ec *executionContext) _ServiceNotificationRule_end(ctx context.Context, field graphql.CollectedField, obj *service.NotificationRule) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ServiceNotificationRule_end(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.End, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v timeutil.Clock) graphql.Marshaler {
+			return ec.marshalNClockTime2githubᚗcomᚋtargetᚋgoalertᚋutilᚋtimeutilᚐClock(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ServiceNotificationRule_end(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ServiceNotificationRule", field, false, false, errors.New("field of type ClockTime does not have child fields"))
+}
+
+func (ec *executionContext) _ServiceNotificationRule_weekdayFilter(ctx context.Context, field graphql.CollectedField, obj *service.NotificationRule) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ServiceNotificationRule_weekdayFilter(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.WeekdayFilter, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v timeutil.WeekdayFilter) graphql.Marshaler {
+			return ec.marshalNWeekdayFilter2githubᚗcomᚋtargetᚋgoalertᚋutilᚋtimeutilᚐWeekdayFilter(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ServiceNotificationRule_weekdayFilter(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ServiceNotificationRule", field, false, false, errors.New("field of type WeekdayFilter does not have child fields"))
 }
 
 func (ec *executionContext) _ServiceOnCallUser_userID(ctx context.Context, field graphql.CollectedField, obj *oncall.ServiceOnCallUser) (ret graphql.Marshaler) {
@@ -25829,7 +26073,7 @@ func (ec *executionContext) unmarshalInputCreateServiceInput(ctx context.Context
 		asMap["description"] = ""
 	}
 
-	fieldsInOrder := [...]string{"name", "description", "favorite", "escalationPolicyID", "newEscalationPolicy", "newIntegrationKeys", "labels", "newHeartbeatMonitors"}
+	fieldsInOrder := [...]string{"name", "description", "favorite", "escalationPolicyID", "alertScheduleEnabled", "notificationTimeZone", "notificationRules", "newEscalationPolicy", "newIntegrationKeys", "labels", "newHeartbeatMonitors"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -25864,6 +26108,27 @@ func (ec *executionContext) unmarshalInputCreateServiceInput(ctx context.Context
 				return it, err
 			}
 			it.EscalationPolicyID = data
+		case "alertScheduleEnabled":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("alertScheduleEnabled"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AlertScheduleEnabled = data
+		case "notificationTimeZone":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("notificationTimeZone"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NotificationTimeZone = data
+		case "notificationRules":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("notificationRules"))
+			data, err := ec.unmarshalOServiceNotificationRuleInput2ᚕgithubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐServiceNotificationRuleInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NotificationRules = data
 		case "newEscalationPolicy":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("newEscalationPolicy"))
 			data, err := ec.unmarshalOCreateEscalationPolicyInput2ᚖgithubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐCreateEscalationPolicyInput(ctx, v)
@@ -27533,6 +27798,50 @@ func (ec *executionContext) unmarshalInputServiceAlertStatsOptions(ctx context.C
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputServiceNotificationRuleInput(ctx context.Context, obj any) (ServiceNotificationRuleInput, error) {
+	var it ServiceNotificationRuleInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"start", "end", "weekdayFilter"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "start":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("start"))
+			data, err := ec.unmarshalNClockTime2githubᚗcomᚋtargetᚋgoalertᚋutilᚋtimeutilᚐClock(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Start = data
+		case "end":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("end"))
+			data, err := ec.unmarshalNClockTime2githubᚗcomᚋtargetᚋgoalertᚋutilᚋtimeutilᚐClock(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.End = data
+		case "weekdayFilter":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("weekdayFilter"))
+			data, err := ec.unmarshalNWeekdayFilter2githubᚗcomᚋtargetᚋgoalertᚋutilᚋtimeutilᚐWeekdayFilter(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.WeekdayFilter = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputServiceSearchOptions(ctx context.Context, obj any) (ServiceSearchOptions, error) {
 	var it ServiceSearchOptions
 	if obj == nil {
@@ -28737,7 +29046,7 @@ func (ec *executionContext) unmarshalInputUpdateServiceInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"id", "name", "description", "escalationPolicyID", "maintenanceExpiresAt"}
+	fieldsInOrder := [...]string{"id", "name", "description", "escalationPolicyID", "maintenanceExpiresAt", "alertScheduleEnabled", "notificationTimeZone", "notificationRules"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -28779,6 +29088,27 @@ func (ec *executionContext) unmarshalInputUpdateServiceInput(ctx context.Context
 				return it, err
 			}
 			it.MaintenanceExpiresAt = data
+		case "alertScheduleEnabled":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("alertScheduleEnabled"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AlertScheduleEnabled = data
+		case "notificationTimeZone":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("notificationTimeZone"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NotificationTimeZone = data
+		case "notificationRules":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("notificationRules"))
+			data, err := ec.unmarshalOServiceNotificationRuleInput2ᚕgithubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐServiceNotificationRuleInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NotificationRules = data
 		}
 	}
 	return it, nil
@@ -36562,6 +36892,26 @@ func (ec *executionContext) _Service(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "alertScheduleEnabled":
+			out.Values[i] = ec._Service_alertScheduleEnabled(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "notificationTimeZone":
+			out.Values[i] = ec._Service_notificationTimeZone(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "notificationRules":
+			out.Values[i] = ec._Service_notificationRules(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "notificationSuppressed":
+			out.Values[i] = ec._Service_notificationSuppressed(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "onCallUsers":
 			field := field
 
@@ -36891,6 +37241,55 @@ func (ec *executionContext) _ServiceConnection(ctx context.Context, sel ast.Sele
 			}
 		case "pageInfo":
 			out.Values[i] = ec._ServiceConnection_pageInfo(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferred), math.MaxInt32)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var serviceNotificationRuleImplementors = []string{"ServiceNotificationRule"}
+
+func (ec *executionContext) _ServiceNotificationRule(ctx context.Context, sel ast.SelectionSet, obj *service.NotificationRule) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, serviceNotificationRuleImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ServiceNotificationRule")
+		case "start":
+			out.Values[i] = ec._ServiceNotificationRule_start(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "end":
+			out.Values[i] = ec._ServiceNotificationRule_end(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "weekdayFilter":
+			out.Values[i] = ec._ServiceNotificationRule_weekdayFilter(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -41071,6 +41470,31 @@ func (ec *executionContext) marshalNServiceConnection2ᚖgithubᚗcomᚋtarget�
 	return ec._ServiceConnection(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNServiceNotificationRule2githubᚗcomᚋtargetᚋgoalertᚋserviceᚐNotificationRule(ctx context.Context, sel ast.SelectionSet, v service.NotificationRule) graphql.Marshaler {
+	return ec._ServiceNotificationRule(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNServiceNotificationRule2ᚕgithubᚗcomᚋtargetᚋgoalertᚋserviceᚐNotificationRuleᚄ(ctx context.Context, sel ast.SelectionSet, v []service.NotificationRule) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNServiceNotificationRule2githubᚗcomᚋtargetᚋgoalertᚋserviceᚐNotificationRule(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) unmarshalNServiceNotificationRuleInput2githubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐServiceNotificationRuleInput(ctx context.Context, v any) (ServiceNotificationRuleInput, error) {
+	res, err := ec.unmarshalInputServiceNotificationRuleInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNServiceOnCallUser2githubᚗcomᚋtargetᚋgoalertᚋoncallᚐServiceOnCallUser(ctx context.Context, sel ast.SelectionSet, v oncall.ServiceOnCallUser) graphql.Marshaler {
 	return ec._ServiceOnCallUser(ctx, sel, &v)
 }
@@ -42783,6 +43207,24 @@ func (ec *executionContext) unmarshalOServiceAlertStatsOptions2ᚖgithubᚗcom�
 	}
 	res, err := ec.unmarshalInputServiceAlertStatsOptions(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOServiceNotificationRuleInput2ᚕgithubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐServiceNotificationRuleInputᚄ(ctx context.Context, v any) ([]ServiceNotificationRuleInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]ServiceNotificationRuleInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNServiceNotificationRuleInput2githubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐServiceNotificationRuleInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
 }
 
 func (ec *executionContext) unmarshalOServiceSearchOptions2ᚖgithubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐServiceSearchOptions(ctx context.Context, v any) (*ServiceSearchOptions, error) {
