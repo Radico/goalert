@@ -11,6 +11,7 @@ import (
 	"github.com/target/goalert/alert/alertlog"
 	"github.com/target/goalert/assignment"
 	"github.com/target/goalert/escalation"
+	"github.com/target/goalert/expflag"
 	"github.com/target/goalert/gadb"
 	"github.com/target/goalert/graphql2"
 	"github.com/target/goalert/heartbeat"
@@ -201,6 +202,47 @@ func (s *Service) HeartbeatMonitors(ctx context.Context, raw *service.Service) (
 	return s.HeartbeatStore.FindAllByService(ctx, raw.ID)
 }
 
+// applyAlertSchedule copies the schedule-based alerting fields onto svc.
+//
+// All of the gating for this feature happens here rather than with
+// @experimental directives on the schema. The directive cannot be applied to a
+// single enum value, and putting it on the input fields would make services
+// that are already scheduled uneditable after the flag is turned off -- the
+// rollback path would strand them.
+func applyAlertSchedule(ctx context.Context, svc *service.Service, urgency *service.Urgency, tz *string, rules []graphql2.ServiceNotificationRuleInput) error {
+	// A service that is already scheduled stays editable without the flag, so
+	// its name, escalation policy and maintenance mode can still be changed --
+	// and so it can be switched back to a non-scheduled urgency.
+	alreadyScheduled := svc.NotificationUrgency == service.UrgencyScheduled
+	enabled := alreadyScheduled || expflag.ContextHas(ctx, expflag.SvcAlertSchedule)
+
+	if urgency != nil {
+		if *urgency == service.UrgencyScheduled && !enabled {
+			return validation.NewFieldError("notificationUrgency", "experimental flag not enabled")
+		}
+		svc.NotificationUrgency = *urgency
+	}
+
+	if !enabled && (tz != nil || rules != nil) {
+		return validation.NewFieldError("notificationRules", "experimental flag not enabled")
+	}
+	if tz != nil {
+		svc.NotificationTimeZone = *tz
+	}
+	if rules != nil {
+		svc.NotificationRules = make([]service.NotificationRule, 0, len(rules))
+		for _, r := range rules {
+			svc.NotificationRules = append(svc.NotificationRules, service.NotificationRule{
+				WeekdayFilter: r.WeekdayFilter,
+				Start:         r.Start,
+				End:           r.End,
+			})
+		}
+	}
+
+	return nil
+}
+
 func (m *Mutation) CreateService(ctx context.Context, input graphql2.CreateServiceInput) (result *service.Service, err error) {
 	if input.NewEscalationPolicy != nil && input.EscalationPolicyID != nil && *input.EscalationPolicyID != "" {
 		return nil, validation.NewFieldError("newEscalationPolicy", "cannot be used with `escalationPolicyID`.")
@@ -216,8 +258,8 @@ func (m *Mutation) CreateService(ctx context.Context, input graphql2.CreateServi
 		if input.Description != nil {
 			svc.Description = *input.Description
 		}
-		if input.NotificationUrgency != nil {
-			svc.NotificationUrgency = *input.NotificationUrgency
+		if err := applyAlertSchedule(ctx, svc, input.NotificationUrgency, input.NotificationTimeZone, input.NotificationRules); err != nil {
+			return err
 		}
 		if input.NewEscalationPolicy != nil {
 			// Set tempUUID so that Normalize won't fail on the yet-to-be-created
@@ -316,8 +358,8 @@ func (a *Mutation) UpdateService(ctx context.Context, input graphql2.UpdateServi
 		svc.MaintenanceExpiresAt = *input.MaintenanceExpiresAt
 	}
 
-	if input.NotificationUrgency != nil {
-		svc.NotificationUrgency = *input.NotificationUrgency
+	if err := applyAlertSchedule(ctx, svc, input.NotificationUrgency, input.NotificationTimeZone, input.NotificationRules); err != nil {
+		return false, err
 	}
 
 	err = a.ServiceStore.UpdateTx(ctx, tx, svc)

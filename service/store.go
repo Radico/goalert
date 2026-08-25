@@ -4,12 +4,12 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/google/uuid"
+	"github.com/target/goalert/gadb"
 	"github.com/target/goalert/permission"
 	"github.com/target/goalert/util"
 	"github.com/target/goalert/util/sqlutil"
 	"github.com/target/goalert/validation/validate"
-
-	"github.com/google/uuid"
 )
 
 type Store struct {
@@ -38,7 +38,9 @@ func NewStore(ctx context.Context, db *sql.DB) (*Store, error) {
 			e.name,
 			fav	is distinct from null,
 			s.maintenance_expires_at,
-			s.notification_urgency
+			s.notification_urgency,
+			s.notification_time_zone,
+			s.notification_suppressed
 		FROM
 			services s
 		JOIN escalation_policies e ON e.id = s.escalation_policy_id
@@ -52,7 +54,9 @@ func NewStore(ctx context.Context, db *sql.DB) (*Store, error) {
 			s.name,
 			s.description,
 			s.escalation_policy_id,
-			s.notification_urgency
+			s.notification_urgency,
+			s.notification_time_zone,
+			s.notification_suppressed
 		FROM services s
 		WHERE s.id = $1
 		FOR UPDATE
@@ -66,7 +70,9 @@ func NewStore(ctx context.Context, db *sql.DB) (*Store, error) {
 			e.name,
 			fav	is distinct from null,
 			s.maintenance_expires_at,
-			s.notification_urgency
+			s.notification_urgency,
+			s.notification_time_zone,
+			s.notification_suppressed
 		FROM
 			services s
 		JOIN escalation_policies e ON e.id = s.escalation_policy_id
@@ -84,7 +90,9 @@ func NewStore(ctx context.Context, db *sql.DB) (*Store, error) {
 			e.name,
 			false,
 			s.maintenance_expires_at,
-			s.notification_urgency
+			s.notification_urgency,
+			s.notification_time_zone,
+			s.notification_suppressed
 		FROM
 			services s,
 			escalation_policies e
@@ -92,8 +100,28 @@ func NewStore(ctx context.Context, db *sql.DB) (*Store, error) {
 			e.id = $1 AND
 			e.id = s.escalation_policy_id
 	`)
-	s.insert = p(`INSERT INTO services (id,name,description,escalation_policy_id,notification_urgency) VALUES ($1,$2,$3,$4,$5)`)
-	s.update = p(`UPDATE services SET name = $2, description = $3, escalation_policy_id = $4, maintenance_expires_at = $5, notification_urgency = $6 WHERE id = $1`)
+	// A service created as scheduled starts suppressed, and the escalation
+	// manager opens it on its next pass if a window is in fact open. Starting
+	// suppressed means a misconfigured window can only delay paging by a tick,
+	// never page outside its window.
+	s.insert = p(`INSERT INTO services (id,name,description,escalation_policy_id,notification_urgency,notification_time_zone,notification_suppressed) VALUES ($1,$2,$3,$4,$5,$6,$5::text = 'scheduled')`)
+
+	// Suppression is only forced on when a service *enters* scheduled mode.
+	// Recomputing it on every update would re-suppress a service that is
+	// currently inside its window, pausing paging until the next engine tick --
+	// indefinitely if the engine is stalled -- for something as unrelated as a
+	// rename or cancelling maintenance mode.
+	s.update = p(`
+		UPDATE services SET
+			name = $2,
+			description = $3,
+			escalation_policy_id = $4,
+			maintenance_expires_at = $5,
+			notification_urgency = $6,
+			notification_time_zone = $7,
+			notification_suppressed = ($6::text = 'scheduled' AND (notification_urgency != 'scheduled' OR notification_suppressed))
+		WHERE id = $1
+	`)
 	s.delete = p(`DELETE FROM services WHERE id = any($1)`)
 
 	return s, prep.Err
@@ -109,11 +137,22 @@ func (s *Store) FindOneForUpdate(ctx context.Context, tx *sql.Tx, id string) (*S
 		return nil, err
 	}
 	var svc Service
-	err = tx.StmtContext(ctx, s.findOneUp).QueryRowContext(ctx, id).Scan(&svc.ID, &svc.Name, &svc.Description, &svc.EscalationPolicyID, &svc.NotificationUrgency)
+	var tz sql.NullString
+	err = tx.StmtContext(ctx, s.findOneUp).QueryRowContext(ctx, id).Scan(&svc.ID, &svc.Name, &svc.Description, &svc.EscalationPolicyID, &svc.NotificationUrgency, &tz, &svc.NotificationSuppressed)
 	if err != nil {
 		return nil, err
 	}
-	return &svc, nil
+	svc.NotificationTimeZone = tz.String
+
+	// loadNotificationRules fills in through the slice, so read the result back
+	// out of it rather than from the copy that went in.
+	one := []Service{svc}
+	err = loadNotificationRules(ctx, gadb.New(tx), one)
+	if err != nil {
+		return nil, err
+	}
+
+	return &one[0], nil
 }
 
 // FindMany returns slice of Service objects given a slice of serviceIDs
@@ -135,14 +174,23 @@ func (s *Store) FindMany(ctx context.Context, ids []string) ([]Service, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	return scanAllFrom(rows)
+	return s.scanAllWithRules(ctx, rows)
 }
 
-func (s *Store) CreateServiceTx(ctx context.Context, tx *sql.Tx, svc *Service) (*Service, error) {
-	err := permission.LimitCheckAny(ctx, permission.Admin, permission.User)
+func (s *Store) CreateServiceTx(ctx context.Context, tx *sql.Tx, svc *Service) (result *Service, err error) {
+	err = permission.LimitCheckAny(ctx, permission.Admin, permission.User)
 	if err != nil {
 		return nil, err
 	}
+
+	// The service row and its notification rules are two statements, so they
+	// need a transaction between them: a service left in scheduled mode with no
+	// rules is permanently suppressed.
+	tx, commit, release, err := s.ensureTx(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 
 	n, err := svc.Normalize()
 	if err != nil {
@@ -154,7 +202,18 @@ func (s *Store) CreateServiceTx(ctx context.Context, tx *sql.Tx, svc *Service) (
 	if tx != nil {
 		stmt = tx.Stmt(stmt)
 	}
-	_, err = stmt.ExecContext(ctx, n.ID, n.Name, n.Description, n.EscalationPolicyID, n.NotificationUrgency)
+	_, err = stmt.ExecContext(ctx, n.ID, n.Name, n.Description, n.EscalationPolicyID, n.NotificationUrgency, newNullString(n.NotificationTimeZone))
+	if err != nil {
+		return nil, err
+	}
+	n.NotificationSuppressed = n.NotificationUrgency == UrgencyScheduled
+
+	err = replaceNotificationRules(ctx, gadb.New(tx), n)
+	if err != nil {
+		return nil, err
+	}
+
+	err = commit()
 	if err != nil {
 		return nil, err
 	}
@@ -192,6 +251,12 @@ func (s *Store) UpdateTx(ctx context.Context, tx *sql.Tx, svc *Service) error {
 		return err
 	}
 
+	tx, commit, release, err := s.ensureTx(ctx, tx)
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	n, err := svc.Normalize()
 	if err != nil {
 		return err
@@ -207,8 +272,38 @@ func (s *Store) UpdateTx(ctx context.Context, tx *sql.Tx, svc *Service) error {
 		Valid: !n.MaintenanceExpiresAt.IsZero(),
 	}
 
-	_, err = wrap(tx, s.update).ExecContext(ctx, n.ID, n.Name, n.Description, n.EscalationPolicyID, mExp, n.NotificationUrgency)
-	return err
+	_, err = wrap(tx, s.update).ExecContext(ctx, n.ID, n.Name, n.Description, n.EscalationPolicyID, mExp, n.NotificationUrgency, newNullString(n.NotificationTimeZone))
+	if err != nil {
+		return err
+	}
+
+	// Rules are replaced wholesale so mode, timezone and windows always change
+	// together -- a service can never be briefly 'scheduled' with no windows.
+	err = replaceNotificationRules(ctx, gadb.New(tx), n)
+	if err != nil {
+		return err
+	}
+
+	return commit()
+}
+
+// ensureTx returns the caller's transaction, or opens one when the caller
+// passed nil.
+//
+// commit and release are both no-ops for a borrowed transaction -- the caller
+// still owns its lifetime, and rolling it back here would abort work this store
+// knows nothing about.
+func (s *Store) ensureTx(ctx context.Context, tx *sql.Tx) (_ *sql.Tx, commit func() error, release func(), _ error) {
+	if tx != nil {
+		return tx, func() error { return nil }, func() {}, nil
+	}
+
+	own, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return own, own.Commit, func() { sqlutil.Rollback(ctx, "service: write", own) }, nil
 }
 
 func (s *Store) FindOneForUser(ctx context.Context, userID, serviceID string) (*Service, error) {
@@ -242,7 +337,13 @@ func (s *Store) FindOneForUser(ctx context.Context, userID, serviceID string) (*
 		return nil, err
 	}
 
-	return &svc, nil
+	one := []Service{svc}
+	err = loadNotificationRules(ctx, gadb.New(s.db), one)
+	if err != nil {
+		return nil, err
+	}
+
+	return &one[0], nil
 }
 
 func (s *Store) FindOne(ctx context.Context, id string) (*Service, error) {
@@ -252,11 +353,13 @@ func (s *Store) FindOne(ctx context.Context, id string) (*Service, error) {
 
 func scanFrom(s *Service, f func(args ...interface{}) error) error {
 	var maintExpiresAt sql.NullTime
-	err := f(&s.ID, &s.Name, &s.Description, &s.EscalationPolicyID, &s.epName, &s.isUserFavorite, &maintExpiresAt, &s.NotificationUrgency)
+	var tz sql.NullString
+	err := f(&s.ID, &s.Name, &s.Description, &s.EscalationPolicyID, &s.epName, &s.isUserFavorite, &maintExpiresAt, &s.NotificationUrgency, &tz, &s.NotificationSuppressed)
 	if err != nil {
 		return err
 	}
 	s.MaintenanceExpiresAt = maintExpiresAt.Time
+	s.NotificationTimeZone = tz.String
 	return nil
 }
 
@@ -283,5 +386,23 @@ func (s *Store) FindAllByEP(ctx context.Context, epID string) ([]Service, error)
 		return nil, err
 	}
 	defer rows.Close()
-	return scanAllFrom(rows)
+	return s.scanAllWithRules(ctx, rows)
+}
+
+func (s *Store) scanAllWithRules(ctx context.Context, rows *sql.Rows) ([]Service, error) {
+	services, err := scanAllFrom(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	err = loadNotificationRules(ctx, gadb.New(s.db), services)
+	if err != nil {
+		return nil, err
+	}
+
+	return services, nil
+}
+
+func newNullString(s string) sql.NullString {
+	return sql.NullString{String: s, Valid: s != ""}
 }

@@ -23,6 +23,7 @@ const query = gql`
         id
         name
         maintenanceExpiresAt
+        notificationSuppressed
         escalationPolicy {
           id
           repeat

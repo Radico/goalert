@@ -593,6 +593,10 @@ input CreateServiceInput {
 
   escalationPolicyID: ID
   notificationUrgency: ServiceUrgency
+
+  notificationTimeZone: String
+  notificationRules: [ServiceNotificationRuleInput!]
+
   newEscalationPolicy: CreateEscalationPolicyInput
   newIntegrationKeys: [CreateIntegrationKeyInput!]
   labels: [SetLabelInput!]
@@ -654,6 +658,15 @@ input UpdateServiceInput {
   escalationPolicyID: ID
   maintenanceExpiresAt: ISOTimestamp
   notificationUrgency: ServiceUrgency
+
+  notificationTimeZone: String
+
+  """
+  Replaces the entire rule set. Sent together with notificationUrgency and
+  notificationTimeZone so the three always change atomically -- a service is
+  never briefly 'scheduled' with no windows.
+  """
+  notificationRules: [ServiceNotificationRuleInput!]
 }
 
 input UpdateEscalationPolicyInput {
@@ -1178,6 +1191,22 @@ type AlertMetadata {
 }
 
 """
+A recurring weekly window during which a service with 'scheduled' urgency will
+notify. Times are in the service's notificationTimeZone.
+"""
+type ServiceNotificationRule {
+  start: ClockTime!
+  end: ClockTime!
+  weekdayFilter: WeekdayFilter!
+}
+
+input ServiceNotificationRuleInput {
+  start: ClockTime!
+  end: ClockTime!
+  weekdayFilter: WeekdayFilter!
+}
+
+"""
 Urgency controls whether alerts for a service notify anyone.
 """
 enum ServiceUrgency {
@@ -1190,6 +1219,13 @@ enum ServiceUrgency {
   Alerts are recorded for tracking only; nobody is notified.
   """
   low
+
+  """
+  Alerts notify only during the service's configured weekly alerting windows
+  (see notificationRules). Outside them they are recorded for tracking only.
+  An alert captured outside a window notifies when the window next opens.
+  """
+  scheduled
 }
 
 type Service {
@@ -1206,6 +1242,23 @@ type Service {
   still record alerts for tracking, but never run the escalation policy.
   """
   notificationUrgency: ServiceUrgency!
+
+  """
+  The IANA time zone the notificationRules are interpreted in. Empty unless
+  notificationUrgency is 'scheduled'.
+  """
+  notificationTimeZone: String
+
+  """
+  The weekly alerting windows. Empty unless notificationUrgency is 'scheduled'.
+  """
+  notificationRules: [ServiceNotificationRule!]!
+
+  """
+  True while alerts for this service are being recorded but not notified
+  because the current time falls outside every notificationRule.
+  """
+  notificationSuppressed: Boolean!
 
   onCallUsers: [ServiceOnCallUser!]!
   integrationKeys: [IntegrationKey!]!

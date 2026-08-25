@@ -1265,12 +1265,29 @@ type ScheduleRule struct {
 }
 
 type Service struct {
-	Description          string
-	EscalationPolicyID   uuid.UUID
-	ID                   uuid.UUID
-	MaintenanceExpiresAt sql.NullTime
-	Name                 string
-	NotificationUrgency  string
+	Description            string
+	EscalationPolicyID     uuid.UUID
+	ID                     uuid.UUID
+	MaintenanceExpiresAt   sql.NullTime
+	Name                   string
+	NotificationSuppressed bool
+	NotificationTimeZone   sql.NullString
+	NotificationUrgency    string
+}
+
+type ServiceNotificationRule struct {
+	CreatedAt time.Time
+	EndTime   timeutil.Clock
+	Friday    bool
+	ID        uuid.UUID
+	Monday    bool
+	Saturday  bool
+	ServiceID uuid.UUID
+	StartTime timeutil.Clock
+	Sunday    bool
+	Thursday  bool
+	Tuesday   bool
+	Wednesday bool
 }
 
 type SwitchoverLog struct {

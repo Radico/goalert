@@ -6,12 +6,19 @@ import ServiceForm from './ServiceForm'
 import { Label, ServiceUrgency } from '../../schema'
 import { useErrorConsumer } from '../util/ErrorConsumer'
 import { useConfigValue } from '../util/RequireConfig'
+import {
+  AlertScheduleRule,
+  alertScheduleInput,
+  rulesFromGQL,
+} from './alertScheduleUtil'
 
 interface Value {
   name: string
   description: string
   escalationPolicyID?: string
   notificationUrgency?: ServiceUrgency
+  notificationTimeZone?: string
+  notificationRules?: AlertScheduleRule[]
   labels: Label[]
 }
 
@@ -22,6 +29,12 @@ const query = gql`
       name
       description
       notificationUrgency
+      notificationTimeZone
+      notificationRules {
+        start
+        end
+        weekdayFilter
+      }
       labels {
         key
         value
@@ -58,6 +71,11 @@ export default function ServiceEditDialog(props: {
     description: data?.service?.description,
     escalationPolicyID: data?.service?.ep?.id,
     notificationUrgency: data?.service?.notificationUrgency,
+    notificationTimeZone: data?.service?.notificationTimeZone || '',
+    notificationRules: rulesFromGQL(
+      data?.service?.notificationRules,
+      data?.service?.notificationTimeZone,
+    ),
     labels: (data?.service?.labels || []).filter((l: Label) =>
       req.includes(l.key),
     ),
@@ -68,7 +86,6 @@ export default function ServiceEditDialog(props: {
   const [saveLabelStatus, saveLabel] = useMutation(setLabel)
 
   const errs = useErrorConsumer(saveStatus.error).append(saveLabelStatus.error)
-  console.log()
 
   return (
     <FormDialog
@@ -85,6 +102,11 @@ export default function ServiceEditDialog(props: {
               description: value?.description || '',
               escalationPolicyID: value?.escalationPolicyID || '',
               notificationUrgency: value?.notificationUrgency || 'high',
+              ...alertScheduleInput(
+                value?.notificationUrgency,
+                value?.notificationTimeZone,
+                value?.notificationRules,
+              ),
             },
           },
           {

@@ -49,6 +49,13 @@ func (db *DB) update(ctx context.Context, all bool, alertID *int) error {
 		return errors.Wrap(err, "set maintenance_expires_at to null where expired")
 	}
 
+	// Must run before the escalation queries below: they read the flag it
+	// materializes.
+	err = db.updateSuppressedServices(ctx)
+	if err != nil {
+		return errors.Wrap(err, "update scheduled-alerting suppression")
+	}
+
 	_, err = db.lock.Exec(ctx, db.cleanupNoSteps)
 	if err != nil {
 		return errors.Wrap(err, "end policies with no steps")
