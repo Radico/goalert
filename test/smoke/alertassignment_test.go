@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/target/goalert/expflag"
 	"github.com/target/goalert/test/smoke/harness"
 )
 
@@ -434,4 +435,136 @@ func TestAlertAssignmentNoOnCall(t *testing.T) {
 	res := queryAssignment(t, h, a.ID())
 	assert.Equal(t, "unassigned", res.Alert.AssignmentSource)
 	assert.Nil(t, res.Alert.AssignedUser)
+}
+
+// emptyFirstStepEPSQL builds a policy whose first step targets a schedule with
+// no rules -- nobody is ever on-call for it -- and whose second step targets
+// user1. This is the shape of a real policy with an uncovered rotation, or one
+// that opens with a notification channel.
+//
+// Services for each urgency share the policy; the scheduled one has a window
+// that opens two hours out, so it starts closed.
+const emptyFirstStepEPSQL = `
+	insert into users (id, name, email, role)
+	values ({{uuid "user1"}}, 'bob', 'bob@example.com', 'user');
+
+	insert into user_contact_methods (id, user_id, name, type, value)
+	values ({{uuid "cm1"}}, {{uuid "user1"}}, 'personal', 'SMS', {{phone "1"}});
+
+	insert into user_notification_rules (user_id, contact_method_id, delay_minutes)
+	values ({{uuid "user1"}}, {{uuid "cm1"}}, 0);
+
+	insert into schedules (id, name, time_zone)
+	values ({{uuid "empty"}}, 'uncovered', 'UTC');
+
+	insert into escalation_policies (id, name, repeat)
+	values ({{uuid "eid"}}, 'esc policy', 0);
+
+	insert into escalation_policy_steps (id, escalation_policy_id, delay, step_number, skip_if_empty)
+	values
+		({{uuid "es1"}}, {{uuid "eid"}}, 60, 0, true),
+		({{uuid "es2"}}, {{uuid "eid"}}, 60, 1, false);
+
+	insert into escalation_policy_actions (escalation_policy_step_id, schedule_id)
+	values ({{uuid "es1"}}, {{uuid "empty"}});
+
+	insert into escalation_policy_actions (escalation_policy_step_id, user_id)
+	values ({{uuid "es2"}}, {{uuid "user1"}});
+
+	insert into services (id, escalation_policy_id, name, notification_urgency)
+	values ({{uuid "low"}}, {{uuid "eid"}}, 'low svc', 'low');
+
+	insert into services (id, escalation_policy_id, name, notification_urgency, notification_time_zone)
+	values ({{uuid "sched"}}, {{uuid "eid"}}, 'sched svc', 'scheduled', 'UTC');
+
+	insert into service_notification_rules (service_id, start_time, end_time, sunday, monday, tuesday, wednesday, thursday, friday, saturday)
+	select {{uuid "sched"}},
+		(now() at time zone 'UTC' + interval '2 hours')::time,
+		(now() at time zone 'UTC' + interval '3 hours')::time,
+		true, true, true, true, true, true, true;
+`
+
+// TestAlertAssignmentSuppressedFallsThrough is the regression test for alerts
+// that never escalate.
+//
+// Suppressing notifications works by freezing the escalation policy, so a low
+// urgency alert -- or one captured outside its service's alerting window --
+// sits on step 0 for as long as it stays open. Resolving ownership strictly
+// against that step left those alerts permanently unassigned whenever step 0
+// had nobody on-call, which is precisely the case off-hours.
+func TestAlertAssignmentSuppressedFallsThrough(t *testing.T) {
+	t.Parallel()
+
+	h := harness.NewHarnessWithFlags(t, emptyFirstStepEPSQL, "add-service-alert-schedule", expflag.FlagSet{expflag.SvcAlertSchedule})
+	defer h.Close()
+
+	h.SetConfigValue("General.EnableAlertAssignment", "true")
+
+	d1 := h.Twilio(t).Device(h.Phone("1"))
+
+	low := h.CreateAlert(h.UUID("low"), "quiet")
+	offHours := h.CreateAlert(h.UUID("sched"), "off hours")
+	h.Trigger()
+
+	for name, id := range map[string]int{"low urgency": low.ID(), "outside window": offHours.ID()} {
+		res := queryAssignment(t, h, id)
+		assert.Equal(t, "onCall", res.Alert.AssignmentSource, name)
+		if assert.NotNil(t, res.Alert.AssignedUser, "%s: expected an assignee", name) {
+			assert.Equal(t, h.UUID("user1"), res.Alert.AssignedUser.ID,
+				"%s: ownership should fall through the empty first step", name)
+		}
+	}
+
+	// Ownership is all that changed: the off-hours alert still waits for its
+	// window before anyone is paged, and the low urgency one never pages at all.
+	h.FastForward(2*time.Hour + 10*time.Minute)
+	h.Trigger()
+	d1.ExpectSMS("off hours")
+
+	res := queryAssignment(t, h, low.ID())
+	assert.Equal(t, "onCall", res.Alert.AssignmentSource)
+	require.NotNil(t, res.Alert.AssignedUser)
+	assert.Equal(t, h.UUID("user1"), res.Alert.AssignedUser.ID)
+}
+
+// TestAlertAssignmentSuppressedFilter covers the search side of the same rule:
+// the alert list and the resolved assignee must agree, or an alert shows an
+// owner it cannot be filtered by.
+func TestAlertAssignmentSuppressedFilter(t *testing.T) {
+	t.Parallel()
+
+	h := harness.NewHarnessWithFlags(t, emptyFirstStepEPSQL, "add-service-alert-schedule", expflag.FlagSet{expflag.SvcAlertSchedule})
+	defer h.Close()
+
+	h.SetConfigValue("General.EnableAlertAssignment", "true")
+
+	low := h.CreateAlert(h.UUID("low"), "quiet")
+	offHours := h.CreateAlert(h.UUID("sched"), "off hours")
+	h.Trigger()
+
+	g := h.GraphQLQueryUserT(t, h.UUID("user1"), fmt.Sprintf(`
+		query {
+			alerts(input: { assignedUserID: "%s", first: 100 }) {
+				nodes { alertID }
+			}
+		}
+	`, h.UUID("user1")))
+	for _, err := range g.Errors {
+		t.Fatal("GraphQL Error:", err.Message)
+	}
+
+	var res struct {
+		Alerts struct {
+			Nodes []struct{ AlertID int }
+		}
+	}
+	require.NoError(t, json.Unmarshal(g.Data, &res))
+
+	ids := make([]int, 0, len(res.Alerts.Nodes))
+	for _, n := range res.Alerts.Nodes {
+		ids = append(ids, n.AlertID)
+	}
+
+	assert.ElementsMatch(t, []int{low.ID(), offHours.ID()}, ids,
+		"alerts that cannot escalate should still be filterable by their on-call owner")
 }

@@ -1091,9 +1091,10 @@ type Alert {
   """
   The user who currently owns this alert, if any.
 
-  While the alert is unclaimed this is whoever is on-call for its current
-  escalation step, and it changes as the alert escalates or rotations hand off.
-  Once claimed it is frozen. Assignment never affects notification routing.
+  While the alert is unclaimed this is whoever is on-call for the earliest
+  escalation step the alert has not already passed, and it changes as the alert
+  escalates or rotations hand off. Once claimed it is frozen. Assignment never
+  affects notification routing.
   """
   assignedUser: User
 
@@ -1110,12 +1111,14 @@ type Alert {
 
 enum AlertAssignmentSource {
   """
-  No explicit assignee, and nobody is on-call for the alert's current step.
+  No explicit assignee, and nobody is on-call for any step the alert has left
+  to escalate through.
   """
   unassigned
 
   """
-  Derived from the user on-call for the alert's current escalation step.
+  Derived from the user on-call for the alert's current escalation step, or
+  the earliest later step with somebody on-call.
   """
   onCall
 
