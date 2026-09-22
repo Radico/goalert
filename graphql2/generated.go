@@ -25509,8 +25509,14 @@ func (ec *executionContext) unmarshalInputAlertSearchOptions(ctx context.Context
 	if _, present := asMap["includeAssigned"]; !present {
 		asMap["includeAssigned"] = false
 	}
+	if _, present := asMap["includeOnCallServices"]; !present {
+		asMap["includeOnCallServices"] = false
+	}
+	if _, present := asMap["includeEscalationPathServices"]; !present {
+		asMap["includeEscalationPathServices"] = false
+	}
 
-	fieldsInOrder := [...]string{"filterByStatus", "filterByServiceID", "search", "first", "after", "favoritesOnly", "includeNotified", "omit", "sort", "createdBefore", "notCreatedBefore", "closedBefore", "notClosedBefore", "assignedUserID", "includeAssigned"}
+	fieldsInOrder := [...]string{"filterByStatus", "filterByServiceID", "search", "first", "after", "favoritesOnly", "includeNotified", "omit", "sort", "createdBefore", "notCreatedBefore", "closedBefore", "notClosedBefore", "assignedUserID", "includeAssigned", "includeOnCallServices", "includeEscalationPathServices"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -25622,6 +25628,20 @@ func (ec *executionContext) unmarshalInputAlertSearchOptions(ctx context.Context
 				return it, err
 			}
 			it.IncludeAssigned = data
+		case "includeOnCallServices":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("includeOnCallServices"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.IncludeOnCallServices = data
+		case "includeEscalationPathServices":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("includeEscalationPathServices"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.IncludeEscalationPathServices = data
 		}
 	}
 	return it, nil

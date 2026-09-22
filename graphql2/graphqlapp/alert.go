@@ -251,6 +251,14 @@ func (q *Query) Alerts(ctx context.Context, opts *graphql2.AlertSearchOptions) (
 	if opts.IncludeNotified != nil && *opts.IncludeNotified {
 		s.NotifiedUserID = permission.UserID(ctx)
 	}
+	onCall := opts.IncludeOnCallServices != nil && *opts.IncludeOnCallServices
+	escPath := opts.IncludeEscalationPathServices != nil && *opts.IncludeEscalationPathServices
+	if onCall || escPath {
+		// Every step includes the first, so asking for the escalation path on
+		// its own is a request for the wider set rather than a no-op.
+		s.OnCallUserID = permission.UserID(ctx)
+		s.OnCallAnyStep = escPath
+	}
 	if config.FromContext(ctx).General.EnableAlertAssignment {
 		if opts.AssignedUserID != nil {
 			s.AssignedUserID = *opts.AssignedUserID

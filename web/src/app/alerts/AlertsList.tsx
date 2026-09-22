@@ -137,6 +137,7 @@ export default function AlertsList(props: AlertsListProps): React.JSX.Element {
   const [fullTime] = useURLParam('fullTime', false)
   const [filter] = useURLParam<string>('filter', 'active')
   const [assignedUserFilter] = useURLParam<string>('assignedUserID', '')
+  const [escalationPath] = useURLParam<boolean>('escalationPath', false)
 
   const [assignmentEnabled] = useConfigValue(
     'General.EnableAlertAssignment',
@@ -203,6 +204,14 @@ export default function AlertsList(props: AlertsListProps): React.JSX.Element {
       // hidden.
       favoritesOnly: !assignedUserID && !serviceID && !policyID && !allServices,
       includeNotified: !serviceID && !policyID, // keep service list alerts specific to that service,
+      // Everything on a service you are the primary on-call for, regardless of
+      // who holds it. includeNotified only covers alerts that already paged
+      // you, so without this an alert claimed by the previous rotation -- or
+      // one that arrived while the service was not notifying -- is invisible to
+      // the person now accountable for it.
+      includeOnCallServices: !serviceID && !policyID && !allServices,
+      includeEscalationPathServices:
+        escalationPath && !serviceID && !policyID && !allServices,
       // On the overview, surface alerts assigned to you *alongside* your
       // favorites rather than instead of them -- the same additive treatment
       // includeNotified gets, so nothing previously visible disappears.
@@ -297,14 +306,24 @@ export default function AlertsList(props: AlertsListProps): React.JSX.Element {
    *
    * Possibilities:
    *   - Home page, showing alerts for all services
-   *   - Home page, showing alerts for any favorited services and notified alerts
+   *   - Home page, showing alerts from services you are on-call for, alerts
+   *     that paged you, alerts assigned to you, and any favorited services
    *   - Services page, alerts for that service
    */
   function getHeaderNote(): string | undefined {
-    const { favoritesOnly, includeNotified } = variables.input
+    const {
+      favoritesOnly,
+      includeOnCallServices,
+      includeAssigned,
+      includeEscalationPathServices,
+    } = variables.input
 
-    if (includeNotified && favoritesOnly) {
-      return `Showing ${filter} alerts you are on-call for and from any services you have favorited.`
+    if (includeOnCallServices && favoritesOnly) {
+      const onCall = includeEscalationPathServices
+        ? 'services you are on-call for or on the escalation path for'
+        : 'services you are on-call for'
+      const alsoAssigned = includeAssigned ? ' or are assigned to you' : ''
+      return `Showing ${filter} alerts from ${onCall} or have favorited, plus any that notified you${alsoAssigned}.`
     }
 
     if (allServices) {

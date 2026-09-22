@@ -62,6 +62,10 @@ function AlertsListFilter(props: AlertsListFilterProps): React.JSX.Element {
     'assignedUserID',
     '',
   )
+  const [escalationPath, setEscalationPath] = useURLParam<boolean>(
+    'escalationPath',
+    false,
+  )
   const [assignmentEnabled] = useConfigValue(
     'General.EnableAlertAssignment',
   ) as [boolean]
@@ -71,6 +75,7 @@ function AlertsListFilter(props: AlertsListFilterProps): React.JSX.Element {
     'allServices',
     'fullTime',
     'assignedUserID',
+    'escalationPath',
   ) // don't reset search param
   const isMobile = useIsWidthDown('md')
   const gridClasses = classnames(
@@ -153,6 +158,30 @@ function AlertsListFilter(props: AlertsListFilterProps): React.JSX.Element {
             )}
           </FormControl>
         </Grid>
+        {/*
+          The list already covers services you are the primary on-call for.
+          This adds the ones that would only reach you after an escalation --
+          what could land on you later, rather than what is yours now.
+
+          Scoped to the same lists as the favorites switch: a service or policy
+          alert list is already narrowed to one service or policy, so widening
+          by on-call has nothing to do there.
+        */}
+        {props.allowShowAll && (
+          <Grid item xs={12}>
+            <FormControlLabel
+              control={
+                <Switch
+                  aria-label='Include Escalation Path Services Toggle'
+                  data-cy='toggle-escalation-path'
+                  checked={escalationPath}
+                  onChange={() => setEscalationPath(!escalationPath)}
+                />
+              }
+              label='Include services I am on the escalation path for'
+            />
+          </Grid>
+        )}
         {assignmentEnabled && (
           <Grid item xs={12}>
             <FormControl className={classes.formControl}>

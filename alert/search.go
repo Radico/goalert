@@ -85,6 +85,28 @@ type SearchOptions struct {
 	// This is the additive counterpart to AssignedUserID; the two are mutually
 	// exclusive and Normalize clears this one when both are set.
 	IncludeAssignedUserID string `json:"ia,omitempty"`
+
+	// OnCallUserID will add every alert belonging to a service the given user is
+	// the primary on-call for -- the first step of the service's escalation
+	// policy -- the same way NotifiedUserID does. Like NotifiedUserID it widens
+	// a service-scoped search and has no effect on one that is not scoped to
+	// services at all.
+	//
+	// NotifiedUserID alone covers only alerts that already paged the user,
+	// which is a record of what happened rather than of what they are
+	// responsible for now. It misses an open alert on their service that was
+	// claimed by the previous rotation, or that arrived while the service was
+	// not notifying.
+	OnCallUserID string `json:"oc,omitempty"`
+
+	// OnCallAnyStep widens OnCallUserID from the first escalation step to every
+	// step, covering services that would only reach the user if an alert
+	// escalated far enough.
+	//
+	// Being further down a policy is not the same as being on-call for the
+	// service, so this is opt-in: it answers "what could reach me tonight"
+	// rather than "what am I responsible for now".
+	OnCallAnyStep bool `json:"oca,omitempty"`
 }
 
 type IDFilter struct {
@@ -136,6 +158,25 @@ var searchTemplate = template.Must(template.New("alert-search").Funcs(search.Hel
 			)
 		)
 	{{ end }}
+	{{/*
+		Services the user is on-call for right now.
+
+		Step 0 is the primary responder -- who the service pages first -- which
+		is what being on-call for a service means. OnCallAnyStep drops that
+		restriction to cover every step the user sits on, however far down.
+	*/}}
+	{{ define "onCallServices" }}
+		a.service_id = any(
+			select svc.id
+			from ep_step_on_call_users oc
+			join escalation_policy_steps step on step.id = oc.ep_step_id
+			join services svc on svc.escalation_policy_id = step.escalation_policy_id
+			where
+				oc.user_id = :onCallUserID::uuid and
+				oc.end_time isnull
+				{{ if not .OnCallAnyStep }} and step.step_number = 0 {{ end }}
+		)
+	{{ end }}
 	SELECT
 		a.id,
 		a.summary,
@@ -165,6 +206,9 @@ var searchTemplate = template.Must(template.New("alert-search").Funcs(search.Hel
 			{{ end }}
 			{{ if .IncludeAssignedUserID }}
 				OR {{ template "assignedToUser" . }}
+			{{ end }}
+			{{ if .OnCallUserID }}
+				OR {{ template "onCallServices" . }}
 			{{ end }}
 		)
 	{{ end }}
@@ -232,15 +276,20 @@ func (opts renderData) Normalize() (*renderData, error) {
 		err = validate.Many(err, validate.OneOf("After.Status", opts.After.Status, StatusTriggered, StatusActive, StatusClosed))
 	}
 	// An explicit assignee filter is restrictive, so it supersedes the additive
-	// "also show me mine" default rather than widening it back out.
+	// defaults rather than letting them widen it back out.
 	if opts.AssignedUserID != "" {
 		opts.IncludeAssignedUserID = ""
+		opts.OnCallUserID = ""
+		opts.OnCallAnyStep = false
 	}
 	if opts.AssignedUserID != "" {
 		err = validate.Many(err, validate.UUID("AssignedUserID", opts.AssignedUserID))
 	}
 	if opts.IncludeAssignedUserID != "" {
 		err = validate.Many(err, validate.UUID("IncludeAssignedUserID", opts.IncludeAssignedUserID))
+	}
+	if opts.OnCallUserID != "" {
+		err = validate.Many(err, validate.UUID("OnCallUserID", opts.OnCallUserID))
 	}
 	if err != nil {
 		return nil, err
@@ -291,6 +340,7 @@ func (opts renderData) QueryArgs() []sql.NamedArg {
 		sql.Named("omit", sqlutil.IntArray(opts.Omit)),
 		sql.Named("notifiedUserID", opts.NotifiedUserID),
 		sql.Named("assignedUserID", opts.assignedUser()),
+		sql.Named("onCallUserID", opts.OnCallUserID),
 		sql.Named("beforeTime", opts.Before),
 		sql.Named("notBeforeTime", opts.NotBefore),
 		sql.Named("closedBeforeTime", opts.ClosedBefore),

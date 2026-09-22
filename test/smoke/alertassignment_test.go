@@ -469,18 +469,14 @@ const emptyFirstStepEPSQL = `
 // past its start, well before its end.
 const suppressedWindowOpensIn = 2*time.Hour + 10*time.Minute
 
-// assignedAlertIDs returns the alerts the "assigned to me" filter reports for a
-// user, which must match what each alert reports as its assignee.
-func assignedAlertIDs(t *testing.T, h *harness.Harness, userID string) []int {
+// alertIDs runs an alert search as the given user. input is the body of the
+// search input object.
+func alertIDs(t *testing.T, h *harness.Harness, userID, input string) []int {
 	t.Helper()
 
 	g := h.GraphQLQueryUserT(t, userID, fmt.Sprintf(`
-		query {
-			alerts(input: { assignedUserID: "%s", first: 100 }) {
-				nodes { alertID }
-			}
-		}
-	`, userID))
+		query { alerts(input: { %s }) { nodes { alertID } } }
+	`, input))
 	for _, err := range g.Errors {
 		t.Fatal("GraphQL Error:", err.Message)
 	}
@@ -499,14 +495,19 @@ func assignedAlertIDs(t *testing.T, h *harness.Harness, userID string) []int {
 	return ids
 }
 
-// TestAlertAssignmentSuppressedFallsThrough is the regression test for alerts
-// that never escalate.
+// assignedAlertIDs returns the alerts the "assigned to me" filter reports for a
+// user, which must match what each alert reports as its assignee.
+func assignedAlertIDs(t *testing.T, h *harness.Harness, userID string) []int {
+	t.Helper()
+	return alertIDs(t, h, userID, fmt.Sprintf(`assignedUserID: "%s", first: 100`, userID))
+}
+
+// TestAlertAssignmentSuppressedFallsThrough covers alerts that never escalate.
 //
 // Suppressing notifications works by freezing the escalation policy, so a low
 // urgency alert -- or one captured outside its service's alerting window --
-// sits on step 0 for as long as it stays open. Resolving ownership strictly
-// against that step left those alerts permanently unassigned whenever step 0
-// had nobody on-call, which is precisely the case off-hours.
+// sits on step 0 for as long as it stays open. Off-hours that step routinely
+// has nobody on-call, so ownership has to come from a later one.
 func TestAlertAssignmentSuppressedFallsThrough(t *testing.T) {
 	t.Parallel()
 
