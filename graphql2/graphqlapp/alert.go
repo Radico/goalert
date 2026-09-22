@@ -253,7 +253,7 @@ func (q *Query) Alerts(ctx context.Context, opts *graphql2.AlertSearchOptions) (
 	}
 	onCall := opts.IncludeOnCallServices != nil && *opts.IncludeOnCallServices
 	escPath := opts.IncludeEscalationPathServices != nil && *opts.IncludeEscalationPathServices
-	if onCall || escPath {
+	if (onCall || escPath) && !config.FromContext(ctx).General.DisableOnCallServiceAlerts {
 		// Every step includes the first, so asking for the escalation path on
 		// its own is a request for the wider set rather than a no-op.
 		s.OnCallUserID = permission.UserID(ctx)

@@ -1689,6 +1689,7 @@ type ConfigID =
   | 'General.DisableLabelCreation'
   | 'General.DisableCalendarSubscriptions'
   | 'General.EnableAlertAssignment'
+  | 'General.DisableOnCallServiceAlerts'
   | 'Services.RequiredLabels'
   | 'Maintenance.AlertCleanupDays'
   | 'Maintenance.AlertAutoCloseDays'

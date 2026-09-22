@@ -66,9 +66,10 @@ function AlertsListFilter(props: AlertsListFilterProps): React.JSX.Element {
     'escalationPath',
     false,
   )
-  const [assignmentEnabled] = useConfigValue(
+  const [assignmentEnabled, onCallServicesDisabled] = useConfigValue(
     'General.EnableAlertAssignment',
-  ) as [boolean]
+    'General.DisableOnCallServiceAlerts',
+  ) as [boolean, boolean]
   const { userID: currentUserID } = useSessionInfo()
   const resetAll = useResetURLParams(
     'filter',
@@ -167,7 +168,7 @@ function AlertsListFilter(props: AlertsListFilterProps): React.JSX.Element {
           alert list is already narrowed to one service or policy, so widening
           by on-call has nothing to do there.
         */}
-        {props.allowShowAll && (
+        {props.allowShowAll && !onCallServicesDisabled && (
           <Grid item xs={12}>
             <FormControlLabel
               control={

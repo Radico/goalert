@@ -139,9 +139,10 @@ export default function AlertsList(props: AlertsListProps): React.JSX.Element {
   const [assignedUserFilter] = useURLParam<string>('assignedUserID', '')
   const [escalationPath] = useURLParam<boolean>('escalationPath', false)
 
-  const [assignmentEnabled] = useConfigValue(
+  const [assignmentEnabled, onCallServicesDisabled] = useConfigValue(
     'General.EnableAlertAssignment',
-  ) as [boolean]
+    'General.DisableOnCallServiceAlerts',
+  ) as [boolean, boolean]
 
   const serviceID = 'serviceID' in props ? props.serviceID : ''
   const policyID = 'policyID' in props ? props.policyID : ''
@@ -209,9 +210,14 @@ export default function AlertsList(props: AlertsListProps): React.JSX.Element {
       // you, so without this an alert claimed by the previous rotation -- or
       // one that arrived while the service was not notifying -- is invisible to
       // the person now accountable for it.
-      includeOnCallServices: !serviceID && !policyID && !allServices,
+      includeOnCallServices:
+        !onCallServicesDisabled && !serviceID && !policyID && !allServices,
       includeEscalationPathServices:
-        escalationPath && !serviceID && !policyID && !allServices,
+        !onCallServicesDisabled &&
+        escalationPath &&
+        !serviceID &&
+        !policyID &&
+        !allServices,
       // On the overview, surface alerts assigned to you *alongside* your
       // favorites rather than instead of them -- the same additive treatment
       // includeNotified gets, so nothing previously visible disappears.
@@ -318,12 +324,17 @@ export default function AlertsList(props: AlertsListProps): React.JSX.Element {
       includeEscalationPathServices,
     } = variables.input
 
+    const alsoAssigned = includeAssigned ? ' or are assigned to you' : ''
+
     if (includeOnCallServices && favoritesOnly) {
       const onCall = includeEscalationPathServices
         ? 'services you are on-call for or on the escalation path for'
         : 'services you are on-call for'
-      const alsoAssigned = includeAssigned ? ' or are assigned to you' : ''
       return `Showing ${filter} alerts from ${onCall} or have favorited, plus any that notified you${alsoAssigned}.`
+    }
+
+    if (favoritesOnly) {
+      return `Showing ${filter} alerts from services you have favorited, plus any that notified you${alsoAssigned}.`
     }
 
     if (allServices) {

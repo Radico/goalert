@@ -108,6 +108,8 @@ type AlertSearchOptions struct {
 	// includeNotified only covers alerts that already paged you, so on its own it
 	// hides an open alert on your service that the previous rotation claimed, or
 	// that arrived while the service was not notifying.
+	//
+	// Ignored when General.DisableOnCallServiceAlerts is set.
 	IncludeOnCallServices *bool `json:"includeOnCallServices,omitempty"`
 	// Widen includeOnCallServices from the first escalation step to every step,
 	// adding services that would only reach you if an alert escalated far enough.

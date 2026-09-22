@@ -170,3 +170,39 @@ func TestAlertOnCallServicesRespectsStatus(t *testing.T) {
 		overviewAlertIDs(t, h, h.UUID("dana"), "StatusUnacknowledged, StatusAcknowledged", false),
 		"the active tab must show both")
 }
+
+// TestAlertOnCallServicesDisabled pins the kill switch: with
+// General.DisableOnCallServiceAlerts set, being on-call stops widening the
+// list and it falls back to favorites, notifications and assignment.
+//
+// The option is refused at the resolver rather than the UI, so a client that
+// keeps sending it cannot re-enable the behavior.
+func TestAlertOnCallServicesDisabled(t *testing.T) {
+	t.Parallel()
+
+	h := harness.NewHarness(t, onCallServicesSQL, "add-service-alert-schedule")
+	defer h.Close()
+
+	h.SetConfigValue("General.EnableAlertAssignment", "true")
+	h.SetConfigValue("General.DisableOnCallServiceAlerts", "true")
+
+	h.Trigger()
+
+	claimed := h.CreateAlert(h.UUID("mine"), "claimed by sam")
+	escalated := h.CreateAlert(h.UUID("escalated"), "would escalate to dana")
+	h.Trigger()
+
+	mutateAlerts(t, h, h.UUID("dana"),
+		fmt.Sprintf(`{ alertIDs: [%d], assignedUserID: "%s" }`, claimed.ID(), h.UUID("sam")))
+
+	assert.Empty(t, overviewAlertIDs(t, h, h.UUID("dana"), "StatusUnacknowledged", false),
+		"being on-call should not widen the list while disabled")
+	assert.Empty(t, overviewAlertIDs(t, h, h.UUID("dana"), "StatusUnacknowledged", true),
+		"the escalation path opt-in must not bypass the config key")
+
+	// Assignment is a separate route and keeps working: sam holds the claimed
+	// alert outright, and fronts the policy the escalated one sits on.
+	assert.ElementsMatch(t, []int{claimed.ID(), escalated.ID()},
+		assignedAlertIDs(t, h, h.UUID("sam")),
+		"disabling on-call visibility must not affect the assigned filter")
+}
