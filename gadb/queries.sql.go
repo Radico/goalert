@@ -840,7 +840,8 @@ WHERE
 ORDER BY
     st.alert_id,
     step.step_number,
-    ocu.start_time
+    ocu.start_time,
+    ocu.id
 `
 
 type Alert_GetManyOnCallAssigneesRow struct {
@@ -868,6 +869,11 @@ type Alert_GetManyOnCallAssigneesRow struct {
 //
 // A step can resolve to several users (overlapping schedule rules, or an
 // override that adds without removing); DISTINCT ON takes the longest-serving.
+// start_time alone does not order them: the escalation manager inserts every
+// on-call row for a pass in one statement, so they share a start_time to the
+// microsecond and the pick would be whatever the plan happened to emit first.
+// id breaks the tie so this and the search template agree on the same user.
+//
 // Alerts with nobody on call on any remaining step return no row at all, and
 // are therefore unassigned.
 func (q *Queries) Alert_GetManyOnCallAssignees(ctx context.Context, alertIds []int64) ([]Alert_GetManyOnCallAssigneesRow, error) {

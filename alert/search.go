@@ -130,7 +130,7 @@ var searchTemplate = template.Must(template.New("alert-search").Funcs(search.Hel
 						ocu.ep_step_id = step.id and
 						ocu.end_time isnull
 					where st.alert_id = a.id
-					order by step.step_number, ocu.start_time
+					order by step.step_number, ocu.start_time, ocu.id
 					limit 1
 				)
 			)

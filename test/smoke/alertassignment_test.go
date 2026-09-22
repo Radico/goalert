@@ -280,36 +280,9 @@ func TestAlertAssignmentFilter(t *testing.T) {
 	mutateAlerts(t, h, h.UUID("user1"),
 		fmt.Sprintf(`{ alertIDs: [%d], assignedUserID: "%s" }`, claimed.ID(), h.UUID("user2")))
 
-	query := func(userID string) []int {
-		t.Helper()
-		g := h.GraphQLQueryUserT(t, userID, fmt.Sprintf(`
-			query {
-				alerts(input: { assignedUserID: "%s", first: 100 }) {
-					nodes { alertID }
-				}
-			}
-		`, userID))
-		for _, err := range g.Errors {
-			t.Fatal("GraphQL Error:", err.Message)
-		}
-
-		var res struct {
-			Alerts struct {
-				Nodes []struct{ AlertID int }
-			}
-		}
-		require.NoError(t, json.Unmarshal(g.Data, &res))
-
-		ids := make([]int, 0, len(res.Alerts.Nodes))
-		for _, n := range res.Alerts.Nodes {
-			ids = append(ids, n.AlertID)
-		}
-		return ids
-	}
-
-	assert.ElementsMatch(t, []int{derived.ID()}, query(h.UUID("user1")),
+	assert.ElementsMatch(t, []int{derived.ID()}, assignedAlertIDs(t, h, h.UUID("user1")),
 		"user1 should see only the alert derived from being on-call")
-	assert.ElementsMatch(t, []int{claimed.ID()}, query(h.UUID("user2")),
+	assert.ElementsMatch(t, []int{claimed.ID()}, assignedAlertIDs(t, h, h.UUID("user2")),
 		"user2 should see only the alert they were assigned")
 }
 
@@ -460,10 +433,17 @@ const emptyFirstStepEPSQL = `
 	insert into escalation_policies (id, name, repeat)
 	values ({{uuid "eid"}}, 'esc policy', 0);
 
-	insert into escalation_policy_steps (id, escalation_policy_id, delay, step_number, skip_if_empty)
+	-- step_number is assigned by fn_inc_ep_step_number_on_insert from the count
+	-- of existing steps, so row order here is what puts the empty step first.
+	--
+	-- skip_if_empty on the first step does nothing while a service is
+	-- suppressed -- the escalation queries exclude it entirely -- but once the
+	-- window opens it is what carries the alert past the uncovered schedule to
+	-- somebody who can be paged, inside the window rather than an hour later.
+	insert into escalation_policy_steps (id, escalation_policy_id, delay, skip_if_empty)
 	values
-		({{uuid "es1"}}, {{uuid "eid"}}, 60, 0, true),
-		({{uuid "es2"}}, {{uuid "eid"}}, 60, 1, false);
+		({{uuid "es1"}}, {{uuid "eid"}}, 60, true),
+		({{uuid "es2"}}, {{uuid "eid"}}, 60, false);
 
 	insert into escalation_policy_actions (escalation_policy_step_id, schedule_id)
 	values ({{uuid "es1"}}, {{uuid "empty"}});
@@ -483,6 +463,41 @@ const emptyFirstStepEPSQL = `
 		(now() at time zone 'UTC' + interval '3 hours')::time,
 		true, true, true, true, true, true, true;
 `
+
+// suppressedWindowOpensIn is how far these tests fast-forward to move the
+// scheduled service inside the window emptyFirstStepEPSQL builds for it --
+// past its start, well before its end.
+const suppressedWindowOpensIn = 2*time.Hour + 10*time.Minute
+
+// assignedAlertIDs returns the alerts the "assigned to me" filter reports for a
+// user, which must match what each alert reports as its assignee.
+func assignedAlertIDs(t *testing.T, h *harness.Harness, userID string) []int {
+	t.Helper()
+
+	g := h.GraphQLQueryUserT(t, userID, fmt.Sprintf(`
+		query {
+			alerts(input: { assignedUserID: "%s", first: 100 }) {
+				nodes { alertID }
+			}
+		}
+	`, userID))
+	for _, err := range g.Errors {
+		t.Fatal("GraphQL Error:", err.Message)
+	}
+
+	var res struct {
+		Alerts struct {
+			Nodes []struct{ AlertID int }
+		}
+	}
+	require.NoError(t, json.Unmarshal(g.Data, &res))
+
+	ids := make([]int, 0, len(res.Alerts.Nodes))
+	for _, n := range res.Alerts.Nodes {
+		ids = append(ids, n.AlertID)
+	}
+	return ids
+}
 
 // TestAlertAssignmentSuppressedFallsThrough is the regression test for alerts
 // that never escalate.
@@ -517,7 +532,7 @@ func TestAlertAssignmentSuppressedFallsThrough(t *testing.T) {
 
 	// Ownership is all that changed: the off-hours alert still waits for its
 	// window before anyone is paged, and the low urgency one never pages at all.
-	h.FastForward(2*time.Hour + 10*time.Minute)
+	h.FastForward(suppressedWindowOpensIn)
 	h.Trigger()
 	d1.ExpectSMS("off hours")
 
@@ -542,29 +557,6 @@ func TestAlertAssignmentSuppressedFilter(t *testing.T) {
 	offHours := h.CreateAlert(h.UUID("sched"), "off hours")
 	h.Trigger()
 
-	g := h.GraphQLQueryUserT(t, h.UUID("user1"), fmt.Sprintf(`
-		query {
-			alerts(input: { assignedUserID: "%s", first: 100 }) {
-				nodes { alertID }
-			}
-		}
-	`, h.UUID("user1")))
-	for _, err := range g.Errors {
-		t.Fatal("GraphQL Error:", err.Message)
-	}
-
-	var res struct {
-		Alerts struct {
-			Nodes []struct{ AlertID int }
-		}
-	}
-	require.NoError(t, json.Unmarshal(g.Data, &res))
-
-	ids := make([]int, 0, len(res.Alerts.Nodes))
-	for _, n := range res.Alerts.Nodes {
-		ids = append(ids, n.AlertID)
-	}
-
-	assert.ElementsMatch(t, []int{low.ID(), offHours.ID()}, ids,
+	assert.ElementsMatch(t, []int{low.ID(), offHours.ID()}, assignedAlertIDs(t, h, h.UUID("user1")),
 		"alerts that cannot escalate should still be filterable by their on-call owner")
 }
