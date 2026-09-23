@@ -87,8 +87,8 @@ type SearchOptions struct {
 	IncludeAssignedUserID string `json:"ia,omitempty"`
 
 	// OnCallUserID will add every alert belonging to a service the given user is
-	// the primary on-call for -- the first step of the service's escalation
-	// policy -- the same way NotifiedUserID does. Like NotifiedUserID it widens
+	// the primary on-call for -- the earliest step of the service's escalation
+	// policy that has anybody on it -- the same way NotifiedUserID does. Like NotifiedUserID it widens
 	// a service-scoped search and has no effect on one that is not scoped to
 	// services at all.
 	//
@@ -161,9 +161,16 @@ var searchTemplate = template.Must(template.New("alert-search").Funcs(search.Hel
 	{{/*
 		Services the user is on-call for right now.
 
-		Step 0 is the primary responder -- who the service pages first -- which
-		is what being on-call for a service means. OnCallAnyStep drops that
-		restriction to cover every step the user sits on, however far down.
+		The primary responder is whoever is on-call for the earliest step that
+		has anybody on it, not literally step 0: a first step covering an
+		uncovered rotation, or targeting only a notification channel, pages
+		nobody, and the responsibility belongs to the first step that does
+		reach a person. That matches how Alert_GetManyOnCallAssignees resolves
+		ownership, so the service a user sees and the alerts naming them as
+		owner stay in agreement.
+
+		OnCallAnyStep drops the restriction to cover every step the user sits
+		on, however far down.
 	*/}}
 	{{ define "onCallServices" }}
 		a.service_id = any(
@@ -174,7 +181,16 @@ var searchTemplate = template.Must(template.New("alert-search").Funcs(search.Hel
 			where
 				oc.user_id = :onCallUserID::uuid and
 				oc.end_time isnull
-				{{ if not .OnCallAnyStep }} and step.step_number = 0 {{ end }}
+				{{ if not .OnCallAnyStep }}
+				and step.step_number = (
+					select min(staffed.step_number)
+					from escalation_policy_steps staffed
+					join ep_step_on_call_users soc on
+						soc.ep_step_id = staffed.id and
+						soc.end_time isnull
+					where staffed.escalation_policy_id = step.escalation_policy_id
+				)
+				{{ end }}
 		)
 	{{ end }}
 	SELECT

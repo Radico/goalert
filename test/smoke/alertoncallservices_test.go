@@ -49,6 +49,28 @@ const onCallServicesSQL = `
 		({{uuid "mine"}},      {{uuid "epMine"}},      'my service',      'low'),
 		({{uuid "theirs"}},    {{uuid "epTheirs"}},    'their service',   'low'),
 		({{uuid "escalated"}}, {{uuid "epEscalated"}}, 'backup service',  'low');
+
+	-- A policy whose first step reaches nobody: the schedule has no rules, so
+	-- dana on the step below is the one actually responsible.
+	insert into schedules (id, name, time_zone)
+	values ({{uuid "uncovered"}}, 'uncovered', 'UTC');
+
+	insert into escalation_policies (id, name, repeat)
+	values ({{uuid "epGap"}}, 'gap ep', 0);
+
+	insert into escalation_policy_steps (id, escalation_policy_id, delay)
+	values
+		({{uuid "gapFirst"}},  {{uuid "epGap"}}, 60),
+		({{uuid "gapSecond"}}, {{uuid "epGap"}}, 60);
+
+	insert into escalation_policy_actions (escalation_policy_step_id, schedule_id)
+	values ({{uuid "gapFirst"}}, {{uuid "uncovered"}});
+
+	insert into escalation_policy_actions (escalation_policy_step_id, user_id)
+	values ({{uuid "gapSecond"}}, {{uuid "dana"}});
+
+	insert into services (id, escalation_policy_id, name, notification_urgency)
+	values ({{uuid "gap"}}, {{uuid "epGap"}}, 'gap service', 'low');
 `
 
 // overviewAlertIDs runs the alert list the way the home page does. escPath is
@@ -205,4 +227,39 @@ func TestAlertOnCallServicesDisabled(t *testing.T) {
 	assert.ElementsMatch(t, []int{claimed.ID(), escalated.ID()},
 		assignedAlertIDs(t, h, h.UUID("sam")),
 		"disabling on-call visibility must not affect the assigned filter")
+}
+
+// TestAlertOnCallUnstaffedFirstStep covers a service whose first escalation
+// step reaches nobody -- an uncovered rotation, or a step targeting only a
+// notification channel.
+//
+// Nobody is on-call for step 0, so resolving the primary against that step
+// literally put the service in nobody's list. The person on the step below is
+// who the alert actually falls to, and an explicit assignment must not hide it
+// from them: acknowledging freezes ownership to the acknowledger, which would
+// otherwise close the last route by which the responsible person could see it.
+func TestAlertOnCallUnstaffedFirstStep(t *testing.T) {
+	t.Parallel()
+
+	h := harness.NewHarness(t, onCallServicesSQL, "add-service-alert-schedule")
+	defer h.Close()
+
+	h.SetConfigValue("General.EnableAlertAssignment", "true")
+	h.Trigger()
+
+	gap := h.CreateAlert(h.UUID("gap"), "nobody above me")
+	h.Trigger()
+
+	assert.Contains(t, overviewAlertIDs(t, h, h.UUID("dana"), "StatusUnacknowledged", false), gap.ID(),
+		"the first step reaches nobody, so the step below is on-call for the service")
+
+	// sam is on no step of this policy and claims it anyway.
+	mutateAlerts(t, h, h.UUID("sam"),
+		fmt.Sprintf(`{ alertIDs: [%d], newStatus: StatusAcknowledged }`, gap.ID()))
+
+	assert.Contains(t, overviewAlertIDs(t, h, h.UUID("dana"), "StatusAcknowledged", false), gap.ID(),
+		"somebody else acknowledging it must not remove it from the on-call user's list")
+	// sam keeps it too, by virtue of holding it rather than being on-call.
+	assert.Contains(t, overviewAlertIDs(t, h, h.UUID("sam"), "StatusAcknowledged", false), gap.ID(),
+		"the acknowledger should still see what they claimed")
 }
