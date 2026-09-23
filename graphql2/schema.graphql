@@ -1010,7 +1010,8 @@ input AlertSearchOptions {
 
   """
   Restrict results to alerts assigned to this user, either explicitly or by
-  them being on-call for the alert's current escalation step.
+  them being on-call for the earliest escalation step the alert has not
+  already passed.
 
   Takes precedence over includeAssigned.
   """
@@ -1021,6 +1022,27 @@ input AlertSearchOptions {
   includeNotified works. Ignored when assignedUserID is set.
   """
   includeAssigned: Boolean = false
+
+  """
+  Additionally include every alert on a service the current user is the primary
+  on-call for -- the first step of its escalation policy -- whoever the alert is
+  assigned to.
+
+  includeNotified only covers alerts that already paged you, so on its own it
+  hides an open alert on your service that the previous rotation claimed, or
+  that arrived while the service was not notifying.
+
+  Ignored when General.DisableOnCallServiceAlerts is set.
+  """
+  includeOnCallServices: Boolean = false
+
+  """
+  Widen includeOnCallServices from the first escalation step to every step,
+  adding services that would only reach you if an alert escalated far enough.
+
+  Every step includes the first, so this implies includeOnCallServices.
+  """
+  includeEscalationPathServices: Boolean = false
 }
 
 enum AlertSearchSort {
@@ -1091,9 +1113,10 @@ type Alert {
   """
   The user who currently owns this alert, if any.
 
-  While the alert is unclaimed this is whoever is on-call for its current
-  escalation step, and it changes as the alert escalates or rotations hand off.
-  Once claimed it is frozen. Assignment never affects notification routing.
+  While the alert is unclaimed this is whoever is on-call for the earliest
+  escalation step the alert has not already passed, and it changes as the alert
+  escalates or rotations hand off. Once claimed it is frozen. Assignment never
+  affects notification routing.
   """
   assignedUser: User
 
@@ -1110,12 +1133,14 @@ type Alert {
 
 enum AlertAssignmentSource {
   """
-  No explicit assignee, and nobody is on-call for the alert's current step.
+  No explicit assignee, and nobody is on-call for any step the alert has left
+  to escalate through.
   """
   unassigned
 
   """
-  Derived from the user on-call for the alert's current escalation step.
+  Derived from the user on-call for the alert's current escalation step, or
+  the earliest later step with somebody on-call.
   """
   onCall
 

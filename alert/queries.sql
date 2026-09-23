@@ -179,17 +179,30 @@ WHERE
 -- Returns the derived assignee for many unclaimed alerts.
 --
 -- Unclaimed alerts (assigned_user_id ISNULL) resolve to whoever is currently
--- on-call for the alert's current escalation step, so ownership follows
--- escalations and rotation handoffs without any writes.
+-- on-call for the alert, so ownership follows escalations and rotation handoffs
+-- without any writes.
 --
 -- Joining on escalation_policy_step_number (NOT NULL, default 0) rather than
 -- escalation_policy_step_id (NULL until the first escalation) means a brand new
 -- alert correctly resolves to step 0's on-call user.
 --
+-- Steps at or after the current one are all candidates, and the earliest one
+-- with somebody on call wins. Resolving strictly against the current step would
+-- leave an alert unassigned whenever that step has no humans -- a rotation with
+-- a coverage gap, or a step targeting only a notification channel. A service
+-- that is low urgency or outside its alerting window never escalates at all, so
+-- its alerts sit on step 0 indefinitely and would be stranded unassigned for as
+-- long as they stay open.
+--
 -- A step can resolve to several users (overlapping schedule rules, or an
 -- override that adds without removing); DISTINCT ON takes the longest-serving.
--- Alerts whose step resolves to nobody -- for example a step targeting only a
--- notification channel -- return no row at all, and are therefore unassigned.
+-- start_time alone does not order them: the escalation manager inserts every
+-- on-call row for a pass in one statement, so they share a start_time to the
+-- microsecond and the pick would be whatever the plan happened to emit first.
+-- id breaks the tie so this and the search template agree on the same user.
+--
+-- Alerts with nobody on call on any remaining step return no row at all, and
+-- are therefore unassigned.
 SELECT DISTINCT ON (st.alert_id)
     st.alert_id,
     ocu.user_id
@@ -198,14 +211,16 @@ FROM
     JOIN alerts a ON a.id = st.alert_id
         AND a.assigned_user_id ISNULL
     JOIN escalation_policy_steps step ON step.escalation_policy_id = st.escalation_policy_id
-        AND step.step_number = st.escalation_policy_step_number
+        AND step.step_number >= st.escalation_policy_step_number
     JOIN ep_step_on_call_users ocu ON ocu.ep_step_id = step.id
         AND ocu.end_time ISNULL
 WHERE
     st.alert_id = ANY (@alert_ids::bigint[])
 ORDER BY
     st.alert_id,
-    ocu.start_time;
+    step.step_number,
+    ocu.start_time,
+    ocu.id;
 
 -- name: Alert_SetManyAlertAssignees :many
 -- Explicitly assigns many alerts to a user (or clears the assignment when NULL).

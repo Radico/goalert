@@ -234,9 +234,10 @@ func (s *Store) canTouchAlert(ctx context.Context, alertID int) error {
 // Assignments returns the resolved ownership of the given alerts.
 //
 // Alerts that have been claimed resolve to their stored assignee; unclaimed
-// alerts resolve to whoever is currently on-call for their escalation step.
-// Every requested alert ID gets exactly one Assignment, so alerts that are
-// neither claimed nor covered by an on-call user come back as unassigned.
+// alerts resolve to whoever is currently on-call for the earliest escalation
+// step the alert has not already passed. Every requested alert ID gets exactly
+// one Assignment, so alerts that are neither claimed nor covered by an on-call
+// user come back as unassigned.
 func (s *Store) Assignments(ctx context.Context, alertIDs []int) ([]Assignment, error) {
 	err := permission.LimitCheckAny(ctx, permission.System, permission.User)
 	if err != nil {
