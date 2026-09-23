@@ -74,7 +74,7 @@ type SearchOptions struct {
 
 	// AssignedUserID, if specified, will restrict alerts to those assigned to
 	// the given user -- either explicitly (claimed) or by virtue of them being
-	// on-call for the alert's current escalation step.
+	// on-call for the alert.
 	//
 	// Unlike NotifiedUserID this is restrictive rather than additive.
 	AssignedUserID string `json:"au,omitempty"`
@@ -107,8 +107,8 @@ var serviceSearchTemplate = template.Must(template.New("alert-search-services").
 var searchTemplate = template.Must(template.New("alert-search").Funcs(search.Helpers()).Parse(`
 	{{/*
 		Matches alerts owned by :assignedUserID -- either claimed by them, or
-		unclaimed and derived from them being on-call for the alert's current
-		escalation step.
+		unclaimed and derived from them being on-call for the earliest step the
+		alert has not already escalated past.
 
 		Defined once because it is used in both the restrictive and the additive
 		mode, and because it must use the same selection rule as
@@ -125,12 +125,12 @@ var searchTemplate = template.Must(template.New("alert-search").Funcs(search.Hel
 					from escalation_policy_state st
 					join escalation_policy_steps step on
 						step.escalation_policy_id = st.escalation_policy_id and
-						step.step_number = st.escalation_policy_step_number
+						step.step_number >= st.escalation_policy_step_number
 					join ep_step_on_call_users ocu on
 						ocu.ep_step_id = step.id and
 						ocu.end_time isnull
 					where st.alert_id = a.id
-					order by ocu.start_time
+					order by step.step_number, ocu.start_time, ocu.id
 					limit 1
 				)
 			)

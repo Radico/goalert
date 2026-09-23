@@ -93,7 +93,8 @@ type AlertSearchOptions struct {
 	ClosedBefore      *time.Time       `json:"closedBefore,omitempty"`
 	NotClosedBefore   *time.Time       `json:"notClosedBefore,omitempty"`
 	// Restrict results to alerts assigned to this user, either explicitly or by
-	// them being on-call for the alert's current escalation step.
+	// them being on-call for the earliest escalation step the alert has not
+	// already passed.
 	//
 	// Takes precedence over includeAssigned.
 	AssignedUserID *string `json:"assignedUserID,omitempty"`
