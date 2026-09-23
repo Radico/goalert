@@ -101,6 +101,21 @@ type AlertSearchOptions struct {
 	// Additionally include alerts assigned to the current user, the same way
 	// includeNotified works. Ignored when assignedUserID is set.
 	IncludeAssigned *bool `json:"includeAssigned,omitempty"`
+	// Additionally include every alert on a service the current user is the primary
+	// on-call for -- the earliest step of its escalation policy that has anybody on
+	// it -- whoever the alert is assigned to.
+	//
+	// includeNotified only covers alerts that already paged you, so on its own it
+	// hides an open alert on your service that the previous rotation claimed, or
+	// that arrived while the service was not notifying.
+	//
+	// Ignored when General.DisableOnCallServiceAlerts is set.
+	IncludeOnCallServices *bool `json:"includeOnCallServices,omitempty"`
+	// Widen includeOnCallServices from the first escalation step to every step,
+	// adding services that would only reach you if an alert escalated far enough.
+	//
+	// Every step includes the first, so this implies includeOnCallServices.
+	IncludeEscalationPathServices *bool `json:"includeEscalationPathServices,omitempty"`
 }
 
 // AlertStats returns aggregated statistics about alerts.

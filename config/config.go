@@ -33,6 +33,7 @@ type Config struct {
 		DisableLabelCreation         bool   `public:"true" info:"Disables the ability to create new labels for services."`
 		DisableCalendarSubscriptions bool   `public:"true" info:"If set, disables all active calendar subscriptions as well as the ability to create new calendar subscriptions."`
 		EnableAlertAssignment        bool   `public:"true" info:"If set, alerts track an assigned user: unclaimed alerts show the current on-call user, acknowledging claims ownership, and alerts can be re-assigned. Does not affect notification routing."`
+		DisableOnCallServiceAlerts   bool   `public:"true" info:"If set, the alert list will not include alerts from services a user is on-call for, leaving only favorited services, alerts that notified them, and alerts assigned to them."`
 	}
 
 	Services struct {
@@ -99,9 +100,9 @@ type Config struct {
 		// https://api.slack.com/docs/token-types#bot
 		AccessToken string `password:"true" info:"Slack app bot user OAuth access token (should start with xoxb-)."`
 
-		SigningSecret       string `password:"true" info:"Signing secret to verify requests from slack."`
-		InteractiveMessages bool   `info:"Enable interactive messages (e.g. buttons)."`
-		DisableBroadcastThreadReplies bool `info:"Disable broadcasting alert status updates in threads to the main channel." public:"true"`
+		SigningSecret                 string `password:"true" info:"Signing secret to verify requests from slack."`
+		InteractiveMessages           bool   `info:"Enable interactive messages (e.g. buttons)."`
+		DisableBroadcastThreadReplies bool   `info:"Disable broadcasting alert status updates in threads to the main channel." public:"true"`
 	}
 
 	Twilio struct {
