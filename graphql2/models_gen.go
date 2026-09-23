@@ -102,8 +102,8 @@ type AlertSearchOptions struct {
 	// includeNotified works. Ignored when assignedUserID is set.
 	IncludeAssigned *bool `json:"includeAssigned,omitempty"`
 	// Additionally include every alert on a service the current user is the primary
-	// on-call for -- the first step of its escalation policy -- whoever the alert is
-	// assigned to.
+	// on-call for -- the earliest step of its escalation policy that has anybody on
+	// it -- whoever the alert is assigned to.
 	//
 	// includeNotified only covers alerts that already paged you, so on its own it
 	// hides an open alert on your service that the previous rotation claimed, or
