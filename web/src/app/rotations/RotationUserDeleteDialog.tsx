@@ -53,18 +53,28 @@ const RotationUserDeleteDialog = (props: {
       errors={
         deleteUserMutationStatus.error ? [deleteUserMutationStatus.error] : []
       }
-      onSubmit={() =>
-        deleteUserMutation(
+      onSubmit={() => {
+        const remaining = userIDs.filter(
+          (_: string, index: number) => index !== userIndex,
+        )
+
+        // Removing someone ahead of the active user shifts them down one.
+        // Removing the active user leaves the index pointing at whoever moved
+        // up into the slot, except at the end of the list, where it has to wrap
+        // -- otherwise this sends an index the rotation no longer has and the
+        // server rejects it with "invalid index for rotation".
+        const shifted =
+          userIndex < data.rotation.activeUserIndex
+            ? data.rotation.activeUserIndex - 1
+            : data.rotation.activeUserIndex
+        const activeUserIndex = shifted >= remaining.length ? 0 : shifted
+
+        return deleteUserMutation(
           {
             input: {
               id: rotationID,
-              userIDs: userIDs.filter(
-                (_: string, index: number) => index !== userIndex,
-              ),
-              activeUserIndex:
-                userIndex < data.rotation.activeUserIndex
-                  ? data.rotation.activeUserIndex - 1
-                  : data.rotation.activeUserIndex,
+              userIDs: remaining,
+              activeUserIndex,
             },
           },
           { additionalTypenames: ['Rotation'] },
@@ -72,7 +82,7 @@ const RotationUserDeleteDialog = (props: {
           if (res.error) return
           onClose()
         })
-      }
+      }}
     />
   )
 }

@@ -204,6 +204,32 @@ function testRotations(screen: ScreenFormat): void {
         .should('not.contain', 'Shift ends')
     })
 
+    it('should allow removing the active user when they are last', () => {
+      // The dialog sends the new active index alongside the shortened user
+      // list. Removing the last user while they are active used to send an
+      // index the rotation no longer had, which the server rejected with
+      // "invalid index for rotation".
+      cy.get('ul[data-cy=users]').find('li').as('parts')
+
+      // make the last user active
+      cy.get('@parts').eq(3).find('button').menu('Set Active')
+      cy.dialogTitle('Are you sure?')
+      cy.dialogFinish('Confirm')
+      cy.get('@parts').eq(3).should('contain', 'Shift ends')
+
+      // then remove them
+      cy.get('@parts').eq(3).find('button').menu('Remove')
+      cy.dialogTitle('Are you sure?')
+      cy.dialogFinish('Confirm')
+
+      cy.get('ul[data-cy=users]').should('not.contain', rot.users[2].name)
+      // the shift falls to the first user rather than erroring
+      cy.get('ul[data-cy=users]')
+        .find('li')
+        .eq(1)
+        .should('contain', 'Shift ends')
+    })
+
     it('should allow changing the active user', () => {
       cy.get('ul[data-cy=users]').find('li').as('parts')
 

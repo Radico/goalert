@@ -53,15 +53,20 @@ export type CompListItemNavProps = CompListItemTextProps & {
 /* A list item that links to a URL. */
 export function CompListItemNav(props: CompListItemNavProps): React.ReactNode {
   return (
-    <li>
+    // The action sits outside the ListItemButton because that button is the
+    // link: anything nested inside it is part of the anchor's hit area, so a
+    // click on the action navigates instead of running the action.
+    <ListItem
+      component='li'
+      disablePadding
+      secondaryAction={props.action}
+      className={props.highlight ? 'Mui-selected' : ''}
+    >
       <ListItemButton component={AppLink} to={props.url} newTab={props.newTab}>
         {props.icon && <ListItemIcon tabIndex={-1}>{props.icon}</ListItemIcon>}
         <ListItemText primary={props.title} secondary={props.subText} />
-        {props.action && (
-          <ListItemSecondaryAction>{props.action}</ListItemSecondaryAction>
-        )}
       </ListItemButton>
-    </li>
+    </ListItem>
   )
 }
 
