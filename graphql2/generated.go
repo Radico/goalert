@@ -25516,7 +25516,7 @@ func (ec *executionContext) unmarshalInputAlertSearchOptions(ctx context.Context
 		asMap["includeEscalationPathServices"] = false
 	}
 
-	fieldsInOrder := [...]string{"filterByStatus", "filterByServiceID", "search", "first", "after", "favoritesOnly", "includeNotified", "omit", "sort", "createdBefore", "notCreatedBefore", "closedBefore", "notClosedBefore", "assignedUserID", "includeAssigned", "includeOnCallServices", "includeEscalationPathServices"}
+	fieldsInOrder := [...]string{"filterByStatus", "filterByServiceID", "search", "first", "after", "favoritesOnly", "includeNotified", "omit", "sort", "createdBefore", "notCreatedBefore", "closedBefore", "notClosedBefore", "assignedUserID", "filterByAssignmentSource", "includeAssigned", "includeOnCallServices", "includeEscalationPathServices"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -25621,6 +25621,13 @@ func (ec *executionContext) unmarshalInputAlertSearchOptions(ctx context.Context
 				return it, err
 			}
 			it.AssignedUserID = data
+		case "filterByAssignmentSource":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filterByAssignmentSource"))
+			data, err := ec.unmarshalOAlertAssignmentSource2ᚕgithubᚗcomᚋtargetᚋgoalertᚋalertᚐAssignmentSourceᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.FilterByAssignmentSource = data
 		case "includeAssigned":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("includeAssigned"))
 			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
@@ -43219,6 +43226,43 @@ func (ec *executionContext) marshalOAlert2ᚖgithubᚗcomᚋtargetᚋgoalertᚋa
 		return graphql.Null
 	}
 	return ec._Alert(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOAlertAssignmentSource2ᚕgithubᚗcomᚋtargetᚋgoalertᚋalertᚐAssignmentSourceᚄ(ctx context.Context, v any) ([]alert.AssignmentSource, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]alert.AssignmentSource, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNAlertAssignmentSource2githubᚗcomᚋtargetᚋgoalertᚋalertᚐAssignmentSource(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOAlertAssignmentSource2ᚕgithubᚗcomᚋtargetᚋgoalertᚋalertᚐAssignmentSourceᚄ(ctx context.Context, sel ast.SelectionSet, v []alert.AssignmentSource) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAlertAssignmentSource2githubᚗcomᚋtargetᚋgoalertᚋalertᚐAssignmentSource(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) marshalOAlertMetadata2ᚕgithubᚗcomᚋtargetᚋgoalertᚋgraphql2ᚐAlertMetadataᚄ(ctx context.Context, sel ast.SelectionSet, v []AlertMetadata) graphql.Marshaler {

@@ -99,6 +99,15 @@ type SearchOptions struct {
 	// not notifying.
 	OnCallUserID string `json:"oc,omitempty"`
 
+	// AssignmentSources, if specified, restricts results to alerts whose
+	// ownership came from one of the given sources -- claimed explicitly,
+	// derived from being on-call, or owned by nobody.
+	//
+	// It narrows AssignedUserID when both are given, and stands on its own
+	// otherwise: sources alone answer questions like "which alerts belong to
+	// nobody at all".
+	AssignmentSources []AssignmentSource `json:"as,omitempty"`
+
 	// OnCallAnyStep widens OnCallUserID from the first escalation step to every
 	// step, covering services that would only reach the user if an alert
 	// escalated far enough.
@@ -137,25 +146,59 @@ var searchTemplate = template.Must(template.New("alert-search").Funcs(search.Hel
 		Alert_GetManyOnCallAssignees so that the alerts listed are exactly the
 		ones that display as assigned to that user.
 	*/}}
+	{{/* The user an unclaimed alert resolves to, or null if it resolves to nobody. */}}
+	{{ define "onCallOwner" }}
+		(
+			select ocu.user_id
+			from escalation_policy_state st
+			join escalation_policy_steps step on
+				step.escalation_policy_id = st.escalation_policy_id and
+				step.step_number >= st.escalation_policy_step_number
+			join ep_step_on_call_users ocu on
+				ocu.ep_step_id = step.id and
+				ocu.end_time isnull
+			where st.alert_id = a.id
+			order by step.step_number, ocu.start_time, ocu.id
+			limit 1
+		)
+	{{ end }}
 	{{ define "assignedToUser" }}
 		(
 			a.assigned_user_id = :assignedUserID::uuid
 			OR (
 				a.assigned_user_id isnull
-				AND :assignedUserID::uuid = (
-					select ocu.user_id
-					from escalation_policy_state st
-					join escalation_policy_steps step on
-						step.escalation_policy_id = st.escalation_policy_id and
-						step.step_number >= st.escalation_policy_step_number
-					join ep_step_on_call_users ocu on
-						ocu.ep_step_id = step.id and
-						ocu.end_time isnull
-					where st.alert_id = a.id
-					order by step.step_number, ocu.start_time, ocu.id
-					limit 1
-				)
+				AND :assignedUserID::uuid = {{ template "onCallOwner" . }}
 			)
+		)
+	{{ end }}
+	{{/*
+		Ownership restricted by where it came from, mirroring the
+		AlertAssignmentSource an alert reports.
+
+		Sources are evaluated as a union, so an empty filter is every source and
+		behaves exactly like assignedToUser. 'unassigned' describes an alert
+		belonging to nobody, so it cannot also belong to a named user --
+		SrcUnassigned reports false whenever one is given, leaving a filter for
+		just that combination matching nothing rather than quietly widening.
+	*/}}
+	{{ define "ownershipMatch" }}
+		(
+			false
+			{{ if .SrcExplicit }}
+				OR a.assigned_user_id {{ if .AssignedUserID }}= :assignedUserID::uuid{{ else }}notnull{{ end }}
+			{{ end }}
+			{{ if .SrcOnCall }}
+				OR (
+					a.assigned_user_id isnull
+					AND {{ template "onCallOwner" . }} {{ if .AssignedUserID }}= :assignedUserID::uuid{{ else }}notnull{{ end }}
+				)
+			{{ end }}
+			{{ if .SrcUnassigned }}
+				OR (
+					a.assigned_user_id isnull
+					AND {{ template "onCallOwner" . }} isnull
+				)
+			{{ end }}
 		)
 	{{ end }}
 	{{/*
@@ -248,8 +291,8 @@ var searchTemplate = template.Must(template.New("alert-search").Funcs(search.Hel
 			{{ end }}
 		)
 	{{ end }}
-	{{ if .AssignedUserID }}
-		AND {{ template "assignedToUser" . }}
+	{{ if or .AssignedUserID .HasSourceFilter }}
+		AND {{ template "ownershipMatch" . }}
 	{{ end }}
 	{{ if not .ClosedBefore.IsZero }}
 		AND EXISTS (select 1 from alert_metrics where alert_id = a.id AND closed_at < :closedBeforeTime)
@@ -301,6 +344,11 @@ func (opts renderData) Normalize() (*renderData, error) {
 	if opts.AssignedUserID != "" {
 		err = validate.Many(err, validate.UUID("AssignedUserID", opts.AssignedUserID))
 	}
+	err = validate.Many(err, validate.Range("AssignmentSources", len(opts.AssignmentSources), 0, 3))
+	for i, src := range opts.AssignmentSources {
+		err = validate.Many(err, validate.OneOf(fmt.Sprintf("AssignmentSources[%d]", i), src,
+			AssignmentSourceUnassigned, AssignmentSourceOnCall, AssignmentSourceExplicit))
+	}
 	if opts.IncludeAssignedUserID != "" {
 		err = validate.Many(err, validate.UUID("IncludeAssignedUserID", opts.IncludeAssignedUserID))
 	}
@@ -330,6 +378,30 @@ func (opts renderData) assignedUser() string {
 		return opts.AssignedUserID
 	}
 	return opts.IncludeAssignedUserID
+}
+
+// hasSource reports whether the given source is in scope. An empty filter means
+// every source, so the rendered SQL matches what assignedToUser always did.
+func (opts renderData) hasSource(s AssignmentSource) bool {
+	if len(opts.AssignmentSources) == 0 {
+		return true
+	}
+	for _, v := range opts.AssignmentSources {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+func (opts renderData) HasSourceFilter() bool { return len(opts.AssignmentSources) > 0 }
+func (opts renderData) SrcExplicit() bool     { return opts.hasSource(AssignmentSourceExplicit) }
+func (opts renderData) SrcOnCall() bool       { return opts.hasSource(AssignmentSourceOnCall) }
+
+// SrcUnassigned is never in scope alongside a user: an alert nobody owns cannot
+// be owned by that user.
+func (opts renderData) SrcUnassigned() bool {
+	return opts.AssignedUserID == "" && opts.hasSource(AssignmentSourceUnassigned)
 }
 
 func (opts renderData) QueryArgs() []sql.NamedArg {

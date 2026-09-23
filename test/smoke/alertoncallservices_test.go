@@ -263,3 +263,79 @@ func TestAlertOnCallUnstaffedFirstStep(t *testing.T) {
 	assert.Contains(t, overviewAlertIDs(t, h, h.UUID("sam"), "StatusAcknowledged", false), gap.ID(),
 		"the acknowledger should still see what they claimed")
 }
+
+// sourceAlertIDs runs the restrictive ownership filter for a user, narrowed to
+// the given assignment sources. Pass an empty source list for every source.
+func sourceAlertIDs(t *testing.T, h *harness.Harness, userID, forUser, sources string) []int {
+	t.Helper()
+
+	input := "first: 100, filterByStatus: [StatusUnacknowledged, StatusAcknowledged]"
+	if forUser != "" {
+		input += fmt.Sprintf(`, assignedUserID: "%s"`, forUser)
+	}
+	if sources != "" {
+		input += fmt.Sprintf(", filterByAssignmentSource: [%s]", sources)
+	}
+	return alertIDs(t, h, userID, input)
+}
+
+// TestAlertAssignmentSourceFilter separates the two ways an alert becomes
+// yours: somebody handed it to you, or you are on-call and nobody has touched
+// it. The list used to conflate them, so there was no way to ask for either on
+// its own -- nor to ask which alerts belong to nobody.
+func TestAlertAssignmentSourceFilter(t *testing.T) {
+	t.Parallel()
+
+	h := harness.NewHarness(t, onCallServicesSQL, "add-service-alert-schedule")
+	defer h.Close()
+
+	h.SetConfigValue("General.EnableAlertAssignment", "true")
+	h.Trigger()
+
+	// dana is on-call for "mine" and nobody is on-call for "theirs" but sam.
+	derived := h.CreateAlert(h.UUID("mine"), "dana is on-call")
+	claimed := h.CreateAlert(h.UUID("mine"), "handed to dana")
+	// "gap" has an unstaffed first step, so it falls through to dana as well.
+	gapAlert := h.CreateAlert(h.UUID("gap"), "unstaffed first step")
+	h.Trigger()
+
+	mutateAlerts(t, h, h.UUID("sam"),
+		fmt.Sprintf(`{ alertIDs: [%d], assignedUserID: "%s" }`, claimed.ID(), h.UUID("dana")))
+
+	dana := h.UUID("dana")
+
+	assert.ElementsMatch(t, []int{derived.ID(), claimed.ID(), gapAlert.ID()},
+		sourceAlertIDs(t, h, dana, dana, ""),
+		"no source filter should behave as it always has, both kinds together")
+	assert.ElementsMatch(t, []int{claimed.ID()}, sourceAlertIDs(t, h, dana, dana, "explicit"),
+		"explicit should be only what was handed to her")
+	assert.ElementsMatch(t, []int{derived.ID(), gapAlert.ID()},
+		sourceAlertIDs(t, h, dana, dana, "onCall"),
+		"onCall should be only what is hers by rotation and unclaimed")
+	assert.Empty(t, sourceAlertIDs(t, h, dana, dana, "unassigned"),
+		"an alert nobody owns cannot also be owned by a named user")
+}
+
+// TestAlertAssignmentSourceUnowned covers the filter standing on its own: which
+// alerts resolve to nobody at all. There was previously no way to ask, which is
+// how an unstaffed first step went unnoticed.
+func TestAlertAssignmentSourceUnowned(t *testing.T) {
+	t.Parallel()
+
+	h := harness.NewHarness(t, onCallServicesSQL, "add-service-alert-schedule")
+	defer h.Close()
+
+	h.SetConfigValue("General.EnableAlertAssignment", "true")
+	h.Trigger()
+
+	owned := h.CreateAlert(h.UUID("mine"), "dana is on-call")
+	h.CreateAlert(h.UUID("gap"), "first step reaches nobody")
+	h.Trigger()
+
+	// "gap" falls through to dana, so nothing is unowned yet.
+	assert.Empty(t, sourceAlertIDs(t, h, h.UUID("dana"), "", "unassigned"),
+		"the gap service still falls through to dana")
+
+	assert.Contains(t, sourceAlertIDs(t, h, h.UUID("dana"), "", "onCall"), owned.ID(),
+		"unclaimed alerts with an on-call owner should be listed")
+}
