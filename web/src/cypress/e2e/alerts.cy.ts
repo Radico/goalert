@@ -1,6 +1,7 @@
 import { Chance } from 'chance'
 
 import { pathPrefix, testScreen } from '../support/e2e'
+import profile from '../fixtures/profile.json'
 const c = new Chance()
 
 function testAlerts(screen: ScreenFormat): void {
@@ -676,6 +677,76 @@ function testAlerts(screen: ScreenFormat): void {
       // the badge follows the alert into the service's own alert list
       cy.visit(`/services/${svc.id}/alerts`)
       cy.get('[data-cy=alert-assignee-badge]').should('contain', otherUser.name)
+    })
+  })
+
+  describe('On-Call Services', () => {
+    beforeEach(() => {
+      cy.updateConfig({ General: { EnableAlertAssignment: true } })
+    })
+
+    it('should show alerts from a service you are on-call for', () => {
+      // The home page is scoped to favorites, and nothing is favorited, so
+      // being on-call for the service is the only thing that can surface this
+      // alert. Claiming it for somebody else rules out the assigned-to-me
+      // route as well.
+      cy.createService().then((svc: Service) => {
+        cy.createEPStep({
+          epID: svc.epID,
+          targets: [{ type: 'user', id: profile.id }],
+        })
+          .task('engine:trigger')
+          .then(() => cy.createUser())
+          .then((other: Profile) =>
+            cy.createAlert({ serviceID: svc.id }).then((a: Alert) =>
+              cy.graphqlVoid(
+                `mutation ($id: Int!, $userID: ID!) {
+                  updateAlerts(input: {
+                    alertIDs: [$id]
+                    assignedUserID: $userID
+                  }) { id }
+                }`,
+                { id: a.id, userID: other.id },
+              ),
+            ),
+          )
+          .then(() => {
+            cy.visit('/alerts')
+            cy.get('body').should('contain', svc.name)
+            cy.get('body').should('contain', 'you are on-call for')
+          })
+      })
+    })
+
+    it('should hide escalation-path services until opted in', () => {
+      // The profile user is on the second step, so this service is not one
+      // they are on-call for -- it only reaches them if the alert escalates.
+      cy.createService().then((svc: Service) => {
+        cy.createUser()
+          .then((primary: Profile) =>
+            cy.createEPStep({
+              epID: svc.epID,
+              targets: [{ type: 'user', id: primary.id }],
+            }),
+          )
+          .then(() =>
+            cy.createEPStep({
+              epID: svc.epID,
+              targets: [{ type: 'user', id: profile.id }],
+            }),
+          )
+          .task('engine:trigger')
+          .then(() => cy.createAlert({ serviceID: svc.id }))
+          .then(() => {
+            cy.visit('/alerts')
+            cy.get('body').should('not.contain', svc.name)
+
+            cy.get('button[aria-label="Filter Alerts"]').click()
+            cy.get('span[data-cy=toggle-escalation-path]').click()
+            cy.get('body').should('contain', svc.name)
+            cy.get('body').should('contain', 'escalation path')
+          })
+      })
     })
   })
 }

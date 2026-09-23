@@ -111,7 +111,9 @@ export interface AlertSearchOptions {
   filterByStatus?: null | AlertStatus[]
   first?: null | number
   includeAssigned?: null | boolean
+  includeEscalationPathServices?: null | boolean
   includeNotified?: null | boolean
+  includeOnCallServices?: null | boolean
   notClosedBefore?: null | ISOTimestamp
   notCreatedBefore?: null | ISOTimestamp
   omit?: null | number[]
@@ -1687,6 +1689,7 @@ type ConfigID =
   | 'General.DisableLabelCreation'
   | 'General.DisableCalendarSubscriptions'
   | 'General.EnableAlertAssignment'
+  | 'General.DisableOnCallServiceAlerts'
   | 'Services.RequiredLabels'
   | 'Maintenance.AlertCleanupDays'
   | 'Maintenance.AlertAutoCloseDays'
