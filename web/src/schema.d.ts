@@ -107,6 +107,7 @@ export interface AlertSearchOptions {
   closedBefore?: null | ISOTimestamp
   createdBefore?: null | ISOTimestamp
   favoritesOnly?: null | boolean
+  filterByAssignmentSource?: null | AlertAssignmentSource[]
   filterByServiceID?: null | string[]
   filterByStatus?: null | AlertStatus[]
   first?: null | number
