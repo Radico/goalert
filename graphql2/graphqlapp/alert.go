@@ -266,6 +266,7 @@ func (q *Query) Alerts(ctx context.Context, opts *graphql2.AlertSearchOptions) (
 		if opts.IncludeAssigned != nil && *opts.IncludeAssigned {
 			s.IncludeAssignedUserID = permission.UserID(ctx)
 		}
+		s.AssignmentSources = opts.FilterByAssignmentSource
 	}
 
 	err = validate.Many(

@@ -14,6 +14,9 @@ import Radio from '@mui/material/Radio'
 import RadioGroup from '@mui/material/RadioGroup'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import FormControl from '@mui/material/FormControl'
+import InputLabel from '@mui/material/InputLabel'
+import MenuItem from '@mui/material/MenuItem'
+import Select from '@mui/material/Select'
 import classnames from 'classnames'
 import { useURLParam, useResetURLParams } from '../../actions'
 import { useIsWidthDown } from '../../util/useWidth'
@@ -66,6 +69,10 @@ function AlertsListFilter(props: AlertsListFilterProps): React.JSX.Element {
     'escalationPath',
     false,
   )
+  const [assignmentSource, setAssignmentSource] = useURLParam<string>(
+    'assignmentSource',
+    '',
+  )
   const [assignmentEnabled, onCallServicesDisabled] = useConfigValue(
     'General.EnableAlertAssignment',
     'General.DisableOnCallServiceAlerts',
@@ -77,6 +84,7 @@ function AlertsListFilter(props: AlertsListFilterProps): React.JSX.Element {
     'fullTime',
     'assignedUserID',
     'escalationPath',
+    'assignmentSource',
   ) // don't reset search param
   const isMobile = useIsWidthDown('md')
   const gridClasses = classnames(
@@ -207,6 +215,31 @@ function AlertsListFilter(props: AlertsListFilterProps): React.JSX.Element {
             >
               Only mine
             </Button>
+            {/*
+              An alert becomes yours two different ways, and they answer
+              different questions: what somebody handed you, versus what is
+              yours by rotation and nobody has picked up yet. Unowned belongs to
+              nobody by definition, so it clears any selected user.
+            */}
+            <FormControl className={classes.formControl} fullWidth>
+              <InputLabel id='assignment-source-label'>Ownership</InputLabel>
+              <Select
+                labelId='assignment-source-label'
+                label='Ownership'
+                data-cy='filter-assignment-source'
+                value={assignmentSource}
+                onChange={(e) => {
+                  const next = e.target.value as string
+                  if (next === 'unassigned') setAssignedUserID('')
+                  setAssignmentSource(next)
+                }}
+              >
+                <MenuItem value=''>Any</MenuItem>
+                <MenuItem value='explicit'>Assigned to a person</MenuItem>
+                <MenuItem value='onCall'>On-call, unclaimed</MenuItem>
+                <MenuItem value='unassigned'>Owned by nobody</MenuItem>
+              </Select>
+            </FormControl>
           </Grid>
         )}
         <Grid item xs={12} className={classes.filterActions}>

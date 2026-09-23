@@ -138,6 +138,7 @@ export default function AlertsList(props: AlertsListProps): React.JSX.Element {
   const [filter] = useURLParam<string>('filter', 'active')
   const [assignedUserFilter] = useURLParam<string>('assignedUserID', '')
   const [escalationPath] = useURLParam<boolean>('escalationPath', false)
+  const [assignmentSource] = useURLParam<string>('assignmentSource', '')
 
   const [assignmentEnabled, onCallServicesDisabled] = useConfigValue(
     'General.EnableAlertAssignment',
@@ -228,6 +229,8 @@ export default function AlertsList(props: AlertsListProps): React.JSX.Element {
           ? policyServiceIDs
           : null,
       assignedUserID,
+      filterByAssignmentSource:
+        assignmentEnabled && assignmentSource ? [assignmentSource] : null,
     },
   }
 

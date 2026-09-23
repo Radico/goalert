@@ -718,6 +718,56 @@ function testAlerts(screen: ScreenFormat): void {
       })
     })
 
+    it('should filter by where ownership came from', () => {
+      cy.createService().then((svc: Service) => {
+        cy.createEPStep({
+          epID: svc.epID,
+          targets: [{ type: 'user', id: profile.id }],
+        })
+          .task('engine:trigger')
+          .then(() => cy.createAlert({ serviceID: svc.id }))
+          .then((derived: Alert) =>
+            cy.createAlert({ serviceID: svc.id }).then((claimed: Alert) =>
+              cy
+                .graphqlVoid(
+                  `mutation ($id: Int!, $userID: ID!) {
+                    updateAlerts(input: {
+                      alertIDs: [$id]
+                      assignedUserID: $userID
+                    }) { id }
+                  }`,
+                  { id: claimed.id, userID: profile.id },
+                )
+                .then(() => {
+                  // both kinds are mine, so the unfiltered list has both
+                  cy.visit(
+                    '/alerts?allServices=1&filter=all&assignedUserID=' +
+                      profile.id,
+                  )
+                  cy.get('body').should('contain', derived.summary)
+                  cy.get('body').should('contain', claimed.summary)
+
+                  // explicit is only what was handed over
+                  cy.visit(
+                    '/alerts?allServices=1&filter=all&assignmentSource=explicit&assignedUserID=' +
+                      profile.id,
+                  )
+                  cy.get('body').should('contain', claimed.summary)
+                  cy.get('body').should('not.contain', derived.summary)
+
+                  // onCall is only what is unclaimed
+                  cy.visit(
+                    '/alerts?allServices=1&filter=all&assignmentSource=onCall&assignedUserID=' +
+                      profile.id,
+                  )
+                  cy.get('body').should('contain', derived.summary)
+                  cy.get('body').should('not.contain', claimed.summary)
+                }),
+            ),
+          )
+      })
+    })
+
     it('should hide escalation-path services until opted in', () => {
       // The profile user is on the second step, so this service is not one
       // they are on-call for -- it only reaches them if the alert escalates.

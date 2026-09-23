@@ -98,6 +98,16 @@ type AlertSearchOptions struct {
 	//
 	// Takes precedence over includeAssigned.
 	AssignedUserID *string `json:"assignedUserID,omitempty"`
+	// Restrict results to alerts whose ownership came from one of these sources.
+	//
+	// Narrows assignedUserID when both are given -- explicit alone is what somebody
+	// handed you, onCall alone is what is yours by rotation and nobody has picked
+	// up. On its own it answers the same question of everybody at once, including
+	// which alerts belong to nobody.
+	//
+	// An empty list means every source. unassigned describes an alert nobody owns,
+	// so pairing it with assignedUserID matches nothing.
+	FilterByAssignmentSource []alert.AssignmentSource `json:"filterByAssignmentSource,omitempty"`
 	// Additionally include alerts assigned to the current user, the same way
 	// includeNotified works. Ignored when assignedUserID is set.
 	IncludeAssigned *bool `json:"includeAssigned,omitempty"`
