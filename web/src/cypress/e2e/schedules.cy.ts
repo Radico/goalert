@@ -227,6 +227,18 @@ function testSchedules(screen: ScreenFormat): void {
       cy.get('body').should('not.contain', rot.name)
     })
 
+    it('should not nest the actions menu inside the row link', () => {
+      // The row is a link and the actions button used to render inside it, so
+      // a real click on the ellipsis followed the link instead of opening the
+      // menu. A synthetic Cypress click fires the handler either way, so assert
+      // the structure rather than the behavior.
+      cy.get('body')
+        .contains('li', rot.name)
+        .find('button[data-cy=other-actions]')
+        .closest('a')
+        .should('not.exist')
+    })
+
     it('should create multiple rules on an assignment', () => {
       if (screen === 'mobile') {
         cy.pageFab('Rotation')
