@@ -4,6 +4,24 @@ GoAlert provides on-call scheduling, automated escalations and notifications (li
 
 ![main-screen-updated](https://user-images.githubusercontent.com/595010/189744659-66ee6aed-b7b6-4625-a2ac-1f8ad3c1ea4f.png)
 
+## About this fork
+
+This is a fork of [target/goalert](https://github.com/target/goalert). It tracks upstream but carries changes that are not upstream, listed here so nobody has to reconstruct them from the commit log. Anything not in this table behaves as upstream does.
+
+| Change | What it does | PR |
+|---|---|---|
+| Per-service notification urgency | A service set to **low** records alerts without paging anyone. The escalation policy never runs for them. | [#1](https://github.com/Radico/goalert/pull/1) |
+| Per-alert assignment | Alerts track an owner. Unclaimed alerts show whoever is on-call, acknowledging claims the alert, and alerts can be re-assigned. Never affects notification routing. Gated on `General.EnableAlertAssignment`. | [#1](https://github.com/Radico/goalert/pull/1) |
+| Alert comments | Free-form comments on an alert, for triage context that does not belong in the system-generated log. Always on. | [#2](https://github.com/Radico/goalert/pull/2) |
+| Skip-if-empty escalation steps | A step that resolves to nobody escalates immediately instead of waiting out its delay. Per-step checkbox, off by default. | [#2](https://github.com/Radico/goalert/pull/2) |
+| Schedule-based alerting windows | A service notifies only during configured weekly windows. Alerts captured outside a window are recorded and notify when the window next opens. Behind the `svc-alert-schedule` experimental flag. | [#3](https://github.com/Radico/goalert/pull/3) |
+| Ownership resolves past empty steps | Ownership falls through to the earliest escalation step that has somebody on-call, instead of resolving against the current step only. Without this, low urgency and out-of-window alerts read as unassigned, since those never escalate off step 0. | [#4](https://github.com/Radico/goalert/pull/4) |
+| Alerts from services you are on-call for | The home page covers every alert on services you are the primary on-call for, whoever holds them. It previously showed alerts that had *paged* you, which hid an open alert on your own service claimed by the previous rotation. Adds an opt-in filter for services you are further down the escalation path for, and `General.DisableOnCallServiceAlerts` to turn the whole thing off. | [#5](https://github.com/Radico/goalert/pull/5) |
+| Row action menus are clickable | `CompListItemNav` rendered its action inside the row's link, so clicking the ellipsis followed the link. On schedule assignments that made it impossible to remove a user. Upstream defect — worth sending back. | [#6](https://github.com/Radico/goalert/pull/6) |
+| Rotation active index on delete | Removing a rotation's active user while they were last in the list sent an index the rotation no longer had, and the server rejected it with `invalid index for rotation`. Upstream defect — worth sending back. | [#6](https://github.com/Radico/goalert/pull/6) |
+| First staffed step is the primary on-call | A service whose first step reaches nobody belonged to nobody. Once somebody acknowledged such an alert, ownership froze to them and it disappeared from the list of whoever was actually responsible. | [#7](https://github.com/Radico/goalert/pull/7) |
+| Filter ownership by source | An Ownership filter separating what was handed to you from what is yours by rotation and unclaimed, plus alerts owned by nobody at all. | [#9](https://github.com/Radico/goalert/pull/9) |
+
 ## Installation
 
 GoAlert is distributed as a single binary with release notes available from the [GitHub Releases](https://github.com/target/goalert/releases) page.
