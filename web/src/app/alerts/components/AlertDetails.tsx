@@ -254,15 +254,18 @@ export default function AlertDetails(
 
   function renderAlertDetails(): ReactNode {
     const alert = props.data
-    let details = (alert.details || '').trim()
-    if (!details) return null
+    const fullDetails = (alert.details || '').trim()
+    if (!fullDetails) return null
 
-    if (!fullDescription && details.length > 1000) {
-      details = details.slice(0, 1000).trim() + ' ...'
-    }
+    // decide from the untruncated text; trimming the cut can shrink it back to <= 1000
+    const isLong = fullDetails.length > 1000
+    const details =
+      isLong && !fullDescription
+        ? fullDetails.slice(0, 1000).trim() + ' ...'
+        : fullDetails
 
     let expandTextAction = null
-    if (details.length > 1000) {
+    if (isLong) {
       let text = 'Show Less'
 
       if (!fullDescription) {
